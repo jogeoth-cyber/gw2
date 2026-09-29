@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guild Wars 2 - Explorateur de Skins et Craft Légendaire</title>
+  <title>Guild Wars 2 - Explorateur de Skins, Caisses & Craft Légendaire</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="gw2_skins_unlocks.js"></script>
   <script>
@@ -53,17 +53,20 @@
           ⚔️
         </div>
         <div>
-          <h1 class="text-xl font-bold text-yellow-400 tracking-wide">GW2 Skins & Craft Légendaire</h1>
-          <p class="text-xs text-slate-400">Base de données d'obtention et recettes de fabrication</p>
+          <h1 class="text-xl font-bold text-yellow-400 tracking-wide">GW2 Skins, Caisses & Craft Légendaire</h1>
+          <p class="text-xs text-slate-400">Base de données d'obtention, coffres d'apparences et recettes de fabrication</p>
         </div>
       </div>
 
       <!-- Tabs Navigation -->
       <nav class="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800">
-        <button id="tabBtnSkins" onclick="switchTab('skins')" class="px-5 py-2 text-sm font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow">
-          ✨ Garde-robe & Skins (<span id="countSkins">0</span>)
+        <button id="tabBtnSkins" onclick="switchTab('skins')" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow">
+          ✨ Skins (<span id="countSkins">0</span>)
         </button>
-        <button id="tabBtnLeg" onclick="switchTab('legendaries')" class="px-5 py-2 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+        <button id="tabBtnContainers" onclick="switchTab('containers')" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+          📦 Caisses & Coffres (<span id="countContainers">0</span>)
+        </button>
+        <button id="tabBtnLeg" onclick="switchTab('legendaries')" class="px-4 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
           🔮 Armurerie Légendaire (<span id="countLeg">0</span>)
         </button>
       </nav>
@@ -107,8 +110,8 @@
       <!-- Search & Filters -->
       <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
         <div class="flex-grow min-w-[260px]">
-          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche (Nom ou mot-clé)</label>
-          <input type="text" id="skinSearch" oninput="filterSkins()" placeholder="Ex: Hache, Ténèbres, Amoureux..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche (Nom de skin, mot-clé ou caisse)</label>
+          <input type="text" id="skinSearch" oninput="filterSkins()" placeholder="Ex: Hache, Ténèbres, Boîte d'outils, Outils..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
         </div>
 
         <div class="w-48">
@@ -146,7 +149,36 @@
       <div id="skinsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
     </section>
 
-    <!-- TAB 2: LEGENDARIES & CRAFTING -->
+    <!-- TAB 2: CONTAINERS / CHESTS / CAISSES -->
+    <section id="secContainers" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
+        <div class="flex-grow min-w-[260px]">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche de Caisse / Boîte / Coffre ou Skin contenu</label>
+          <input type="text" id="containerSearch" oninput="filterContainers()" placeholder="Ex: Boîte d'outils, Choix, Amoureux, Fusil..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+        </div>
+
+        <div class="w-56">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Disponibilité Comptoir</label>
+          <select id="containerTpFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+            <option value="">Toutes les caisses</option>
+            <option value="tp">Achetable au comptoir (TP)</option>
+            <option value="account">Lié au compte / Spécial</option>
+          </select>
+        </div>
+
+        <div class="flex items-end pb-0.5">
+          <span id="containersMatchingCount" class="text-xs text-amber-300 font-medium bg-amber-950/40 px-3 py-2.5 rounded-xl border border-amber-800/50">
+            0 caisse(s) affichée(s)
+          </span>
+        </div>
+      </div>
+
+      <!-- Containers Grid -->
+      <div id="containersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </section>
+
+    <!-- TAB 3: LEGENDARIES & CRAFTING -->
     <section id="secLeg" class="hidden space-y-6">
       <!-- Search & Filters -->
       <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
@@ -181,17 +213,16 @@
   </main>
 
   <footer class="bg-gwCard border-t border-gwCardBorder py-6 text-center text-xs text-slate-500">
-    <p>Guild Wars 2 Skin & Legendary Explorer • Données extraites depuis GW2.app API</p>
+    <p>Guild Wars 2 Skin, Container & Legendary Explorer • Données extraites depuis GW2.app API</p>
   </footer>
 
   <script>
-    let dbData = { skins: [], legendaries: [] };
+    let dbData = { skins: [], containers: [], legendaries: [] };
 
     async function loadData() {
       document.getElementById('loadingBox').classList.remove('hidden');
       document.getElementById('errorBox').classList.add('hidden');
 
-      // 1. Try global window.GW2_SKINS_DB from gw2_skins_unlocks.js
       if (window.GW2_SKINS_DB && (window.GW2_SKINS_DB.skins || window.GW2_SKINS_DB.legendaries)) {
         console.log("Loaded data from window.GW2_SKINS_DB script tag.");
         dbData = window.GW2_SKINS_DB;
@@ -199,7 +230,6 @@
         return;
       }
 
-      // 2. Try fetching gw2_skins_unlocks.json
       try {
         const resp = await fetch('gw2_skins_unlocks.json');
         if (!resp.ok) throw new Error('Http ' + resp.status);
@@ -233,29 +263,41 @@
     function initUI() {
       document.getElementById('loadingBox').classList.add('hidden');
       document.getElementById('countSkins').innerText = dbData.skins ? dbData.skins.length : 0;
+      document.getElementById('countContainers').innerText = dbData.containers ? dbData.containers.length : 0;
       document.getElementById('countLeg').innerText = dbData.legendaries ? dbData.legendaries.length : 0;
 
       switchTab('skins');
       filterSkins();
+      filterContainers();
       filterLegendaries();
     }
 
     function switchTab(tab) {
       const btnSkins = document.getElementById('tabBtnSkins');
+      const btnContainers = document.getElementById('tabBtnContainers');
       const btnLeg = document.getElementById('tabBtnLeg');
+
       const secSkins = document.getElementById('secSkins');
+      const secContainers = document.getElementById('secContainers');
       const secLeg = document.getElementById('secLeg');
 
+      btnSkins.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnContainers.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnLeg.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+
+      secSkins.classList.add('hidden');
+      secContainers.classList.add('hidden');
+      secLeg.classList.add('hidden');
+
       if (tab === 'skins') {
-        btnSkins.className = "px-5 py-2 text-sm font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow";
-        btnLeg.className = "px-5 py-2 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+        btnSkins.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow";
         secSkins.classList.remove('hidden');
-        secLeg.classList.add('hidden');
+      } else if (tab === 'containers') {
+        btnContainers.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-amber-300 bg-amber-950/60 shadow border border-amber-800/50";
+        secContainers.classList.remove('hidden');
       } else {
-        btnLeg.className = "px-5 py-2 text-sm font-semibold rounded-lg transition-all text-purple-300 bg-purple-950/60 shadow border border-purple-800/50";
-        btnSkins.className = "px-5 py-2 text-sm font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+        btnLeg.className = "px-4 py-2 text-xs font-semibold rounded-lg transition-all text-purple-300 bg-purple-950/60 shadow border border-purple-800/50";
         secLeg.classList.remove('hidden');
-        secSkins.classList.add('hidden');
       }
     }
 
@@ -271,7 +313,8 @@
         if (query) {
           const matchName = s.name && s.name.toLowerCase().includes(query);
           const matchKeywords = s.keywords && (Array.isArray(s.keywords) ? s.keywords.join(' ') : s.keywords).toLowerCase().includes(query);
-          if (!matchName && !matchKeywords) return false;
+          const matchContainers = s.containers && s.containers.some(c => c.name && c.name.toLowerCase().includes(query));
+          if (!matchName && !matchKeywords && !matchContainers) return false;
         }
         return true;
       });
@@ -290,7 +333,7 @@
       container.innerHTML = skins.map(s => {
         const rarity = s.rarity || 'Basic';
         const acqList = s.acquisitionMethods || [];
-        const usedIn = s.usedIn || [];
+        const containers = s.containers || [];
 
         let unlockHtml = '';
         if (acqList.length > 0) {
@@ -308,12 +351,24 @@
               return `<li class="text-xs text-slate-400">Obtention spéciale</li>`;
             }
           }).join('');
+        }
 
-          if (acqList.length > 4) {
-            unlockHtml += `<li class="text-[11px] text-slate-500 italic text-right">+ ${acqList.length - 4} autre(s) moyen(s)</li>`;
-          }
-        } else {
-          unlockHtml = `<li class="text-xs text-slate-500 italic">Aucune méthode d'obtention spécifique enregistrée</li>`;
+        let containerBoxHtml = '';
+        if (containers.length > 0) {
+          containerBoxHtml = `<div class="mt-2 pt-2 border-t border-slate-800/80">
+            <p class="text-[11px] font-semibold text-amber-300/90 uppercase tracking-wider mb-1.5">📦 Obtenable dans caisse/boîte :</p>
+            <ul class="space-y-1">
+              ${containers.map(c => `
+                <li class="flex items-center justify-between text-xs bg-amber-950/30 border border-amber-800/40 p-1.5 rounded-lg">
+                  <div class="flex items-center space-x-2 truncate">
+                    <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded">
+                    <span class="truncate text-amber-200">${escapeHtml(c.name)}</span>
+                  </div>
+                  ${c.isTpItem ? `<span class="text-[9px] bg-green-950 text-green-300 px-1.5 py-0.5 rounded border border-green-800 flex-shrink-0 font-bold">TP</span>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>`;
         }
 
         return `
@@ -330,16 +385,87 @@
                 </div>
               </div>
 
-              <!-- Unlocks section -->
-              <div class="mt-2 pt-2 border-t border-slate-800/80">
-                <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Méthodes de déblocage :</p>
-                <ul class="space-y-1.5">${unlockHtml}</ul>
-              </div>
+              ${unlockHtml ? `
+                <div class="mt-2 pt-2 border-t border-slate-800/80">
+                  <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Méthodes de déblocage :</p>
+                  <ul class="space-y-1.5">${unlockHtml}</ul>
+                </div>
+              ` : ''}
+
+              ${containerBoxHtml}
             </div>
 
             <div class="mt-3 pt-2 text-[10px] text-slate-500 flex justify-between">
               <span>ID Skin : #${s.id}</span>
-              ${usedIn.length > 0 ? `<span class="text-purple-400 font-medium">Requis dans ${usedIn.length} succès</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- CONTAINERS RENDER ---
+    function filterContainers() {
+      const query = document.getElementById('containerSearch').value.toLowerCase().trim();
+      const tpFilter = document.getElementById('containerTpFilter').value;
+
+      const filtered = (dbData.containers || []).filter(c => {
+        if (tpFilter === 'tp' && !c.isTpItem) return false;
+        if (tpFilter === 'account' && c.isTpItem) return false;
+
+        if (query) {
+          const matchName = c.name && c.name.toLowerCase().includes(query);
+          const matchSkins = c.skins && c.skins.some(s => s.name && s.name.toLowerCase().includes(query));
+          if (!matchName && !matchSkins) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('containersMatchingCount').innerText = `${filtered.length} caisse(s) trouvée(s)`;
+      renderContainers(filtered);
+    }
+
+    function renderContainers(list) {
+      const container = document.getElementById('containersGrid');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucune caisse / boîte ne correspond aux critères.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(c => {
+        const skins = c.skins || [];
+
+        return `
+          <div class="bg-gwCard border border-amber-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div class="flex items-center space-x-4 mb-4 pb-3 border-b border-slate-800">
+                <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-700/50 object-cover flex-shrink-0" alt="">
+                <div>
+                  <h3 class="font-bold text-sm text-amber-200">${escapeHtml(c.name)}</h3>
+                  <div class="flex items-center space-x-2 mt-1">
+                    ${c.isTpItem ?
+                      `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-green-950 text-green-300 border border-green-800">🛒 Achetable au comptoir</span>` :
+                      `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">🔒 Lié au compte / Spécial</span>`
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">✨ Skins contenus / à choisir (${skins.length}) :</h4>
+                <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2.5 max-h-56 overflow-y-auto space-y-1.5">
+                  ${skins.map(s => `
+                    <div class="flex items-center space-x-2 bg-slate-900/80 p-1.5 rounded-lg border border-slate-800 text-xs">
+                      <img src="${s.icon || ''}" class="w-5 h-5 rounded">
+                      <span class="truncate font-medium text-slate-200">${escapeHtml(s.name)}</span>
+                      <span class="text-[10px] text-slate-500 ml-auto">${s.type || ''}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
+              <span>Item ID : #${c.id}</span>
             </div>
           </div>
         `;

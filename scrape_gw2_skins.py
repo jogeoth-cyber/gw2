@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script de récupération des skins (et leurs déblocages) ainsi que de l'Armurerie Légendaire (et leurs recettes de craft) depuis GW2.app.
-Génère une base SQLite, un fichier JSON et un fichier JavaScript (.js) pour compatibilité navigateur directe (file://).
+Script de récupération des skins (et leurs déblocages), caisses/boîtes d'apparences,
+et de l'Armurerie Légendaire (recettes de craft) depuis GW2.app.
+Génère une base SQLite, un fichier JSON et un fichier JavaScript (.js).
 """
 
 import os
@@ -28,6 +29,7 @@ def fetch_json(url, timeout=12):
 def init_sqlite_db(db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS skins (
             id INTEGER PRIMARY KEY,
@@ -38,12 +40,25 @@ def init_sqlite_db(db_path):
             keywords TEXT,
             acquisition_methods_json TEXT,
             used_in_json TEXT,
+            containers_json TEXT,
             full_data_json TEXT
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_skins_name ON skins(name)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_skins_type ON skins(type)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_skins_rarity ON skins(rarity)")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS containers (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            icon TEXT,
+            is_tp_item INTEGER,
+            contained_skins_json TEXT,
+            full_data_json TEXT
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_containers_name ON containers(name)")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS legendaries (
@@ -92,24 +107,88 @@ def build_craft_tree(item_id, mystic_map, depth=0, max_depth=3):
         "ingredients": []
     }
 
-    ingredients = recipe.get("ingredients", [])
-    ingredient_items = recipe.get("ingredient_items", [])
+    ingredients = recipe.get("ingredients") or []
+    ingredient_items = recipe.get("ingredient_items") or []
 
     for ing, ing_item in zip(ingredients, ingredient_items):
-        sub_id = ing.get("id")
+        sub_id = ing.get("id") if isinstance(ing, dict) else None
         sub_tree = build_craft_tree(sub_id, mystic_map, depth + 1, max_depth) if sub_id else None
+        ing_item_dict = ing_item if isinstance(ing_item, dict) else {}
         tree["ingredients"].append({
             "id": sub_id,
-            "count": ing.get("count", 1),
-            "name": ing_item.get("name"),
-            "rarity": ing_item.get("rarity"),
-            "icon": ing_item.get("icon"),
+            "count": ing.get("count", 1) if isinstance(ing, dict) else 1,
+            "name": ing_item_dict.get("name"),
+            "rarity": ing_item_dict.get("rarity"),
+            "icon": ing_item_dict.get("icon"),
             "sub_recipe": sub_tree
         })
     return tree
 
+def extract_containers_from_acquisition(acq_methods):
+    containers = []
+    seen_ids = set()
+
+    for m in (acq_methods or []):
+        if not isinstance(m, dict):
+            continue
+
+        # 1. Direct containeritem in skin acquisition
+        ci = m.get("containeritem")
+        if isinstance(ci, dict) and ci.get("container"):
+            c = ci["container"]
+            cid = c.get("item_id") or c.get("id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                citem = c.get("item") if isinstance(c.get("item"), dict) else {}
+                containers.append({
+                    "id": cid,
+                    "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
+                    "icon": citem.get("icon") or c.get("icon", ""),
+                    "isTpItem": citem.get("isTpItem", False),
+                    "description": citem.get("description", "")
+                })
+
+        # 2. Vendoritem with container/chest ingredients
+        vi = m.get("vendoritem")
+        if isinstance(vi, dict):
+            for ing_item in (vi.get("ingredient_items") or []):
+                if not isinstance(ing_item, dict):
+                    continue
+                itype = ing_item.get("type", "")
+                iname = ing_item.get("name", "")
+                # Check if ingredient is a container/box/gizmo/chest
+                if itype in ["Container", "Gizmo"] or any(k in iname.lower() for k in ["boîte", "boite", "caisse", "coffre", "pack"]):
+                    cid = ing_item.get("id")
+                    if cid and cid not in seen_ids:
+                        seen_ids.add(cid)
+                        containers.append({
+                            "id": cid,
+                            "name": iname,
+                            "icon": ing_item.get("icon", ""),
+                            "isTpItem": ing_item.get("isTpItem", False),
+                            "description": ing_item.get("description", "")
+                        })
+
+        # 3. Item that itself comes from a container/box
+        item_obj = m.get("item")
+        if isinstance(item_obj, dict) and isinstance(item_obj.get("container"), dict):
+            c = item_obj["container"]
+            cid = c.get("item_id") or c.get("id")
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                citem = c.get("item") if isinstance(c.get("item"), dict) else {}
+                containers.append({
+                    "id": cid,
+                    "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
+                    "icon": citem.get("icon") or c.get("icon", ""),
+                    "isTpItem": citem.get("isTpItem", False),
+                    "description": citem.get("description", "")
+                })
+
+    return containers
+
 def main():
-    parser = argparse.ArgumentParser(description="Recuperation des skins GW2, debloquages et craft legendaire depuis gw2.app")
+    parser = argparse.ArgumentParser(description="Recuperation des skins, caisses/boites et craft legendaire depuis gw2.app")
     parser.add_argument("--limit", type=int, default=0, help="Limiter le nombre de skins (0 pour tous)")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Nombre de threads concurrents")
     parser.add_argument("--db", type=str, default=DEFAULT_DB_PATH, help="Chemin du fichier SQLite")
@@ -118,12 +197,12 @@ def main():
     parser.add_argument("--lang", type=str, default="fr", help="Langue (fr, en, de, es)")
     args = parser.parse_args()
 
-    print(f"=== GW2 Skins Unlocks & Legendary Crafting Scraper ({args.lang}) ===")
+    print(f"=== GW2 Skins, Caisses & Legendary Craft Scraper ({args.lang}) ===")
 
     # -------------------------------------------------------------
     # PART 1: SKINS & UNLOCKS
     # -------------------------------------------------------------
-    print(f"\n[1/2] Recuperation des skins depuis {BASE_URL}/skins/all...")
+    print(f"\n[1/3] Recuperation des skins depuis {BASE_URL}/skins/all...")
     try:
         all_skins_summary = fetch_json(f"{BASE_URL}/skins/all?lang={args.lang}")
     except Exception as e:
@@ -137,7 +216,7 @@ def main():
         all_skins_summary = all_skins_summary[:args.limit]
         print(f"Limitation appliquee : {len(all_skins_summary)} skins")
 
-    skin_ids = [s["id"] for s in all_skins_summary if "id" in s]
+    skin_ids = [s["id"] for s in all_skins_summary if isinstance(s, dict) and "id" in s]
     print(f"Telechargement des details pour {len(skin_ids)} skins ({args.workers} workers)...")
 
     skin_results = {}
@@ -160,9 +239,45 @@ def main():
     print(f"Extraction skins terminee en {time.time() - t0:.2f}s ({len(skin_results)} skins recuperes).")
 
     # -------------------------------------------------------------
-    # PART 2: LEGENDARY ARMORY & CRAFTING
+    # PART 2: CONTAINERS / CHESTS / CAISSES EXTRACTION
     # -------------------------------------------------------------
-    print(f"\n[2/2] Recuperation des objets et recettes legendaires depuis {BASE_URL}/legendary-armory/all...")
+    print("\n[2/3] Indexation des caisses, boites et coffres d'apparences...")
+    container_map = {}  # cid -> { id, name, icon, isTpItem, skins: [] }
+
+    for sid, sdata in skin_results.items():
+        sinfo = sdata.get("skin") or {}
+        acq_methods = sdata.get("acquisitionMethods") or []
+
+        skin_containers = extract_containers_from_acquisition(acq_methods)
+        sdata["containers"] = skin_containers
+
+        # Map container -> skin
+        for c in skin_containers:
+            cid = c["id"]
+            if cid not in container_map:
+                container_map[cid] = {
+                    "id": cid,
+                    "name": c["name"],
+                    "icon": c["icon"],
+                    "isTpItem": c["isTpItem"],
+                    "description": c.get("description", ""),
+                    "skins": []
+                }
+            container_map[cid]["skins"].append({
+                "id": sid,
+                "name": sinfo.get("name", ""),
+                "type": sinfo.get("type", ""),
+                "rarity": sinfo.get("rarity", ""),
+                "icon": sinfo.get("icon", "")
+            })
+
+    container_list = list(container_map.values())
+    print(f"Total de caisses/boites/coffres d'apparences indexes : {len(container_list)}")
+
+    # -------------------------------------------------------------
+    # PART 3: LEGENDARY ARMORY & CRAFTING
+    # -------------------------------------------------------------
+    print(f"\n[3/3] Recuperation des objets et recettes legendaires depuis {BASE_URL}/legendary-armory/all...")
     try:
         leg_summary = fetch_json(f"{BASE_URL}/legendary-armory/all?lang={args.lang}")
     except Exception as e:
@@ -171,7 +286,6 @@ def main():
 
     print(f"Total d'objets legendaires trouves : {len(leg_summary)}")
 
-    print(f"Chargement des recettes de Forge Mystique depuis {BASE_URL}/mystic-recipes/all...")
     try:
         mystic_recipes = fetch_json(f"{BASE_URL}/mystic-recipes/all?lang={args.lang}")
     except Exception as e:
@@ -179,13 +293,14 @@ def main():
         mystic_recipes = []
 
     mystic_map = {}
-    for r in mystic_recipes:
+    for r in (mystic_recipes or []):
+        if not isinstance(r, dict):
+            continue
         out_id = r.get("output_item_id")
         if out_id and (out_id not in mystic_map or r.get("is_primary")):
             mystic_map[out_id] = r
 
-    leg_ids = [leg["id"] for leg in leg_summary if "id" in leg]
-    print(f"Extraction des details d'obtention pour {len(leg_ids)} objets legendaires...")
+    leg_ids = [leg["id"] for leg in leg_summary if isinstance(leg, dict) and "id" in leg]
 
     leg_item_details = {}
     with ThreadPoolExecutor(max_workers=min(args.workers, 15)) as executor:
@@ -198,12 +313,14 @@ def main():
 
     leg_results = []
     for leg in leg_summary:
+        if not isinstance(leg, dict):
+            continue
         lid = leg.get("id")
-        item_data = leg.get("item", {})
-        item_det = leg_item_details.get(lid, {})
+        item_data = leg.get("item") if isinstance(leg.get("item"), dict) else {}
+        item_det = leg_item_details.get(lid) if isinstance(leg_item_details.get(lid), dict) else {}
 
         craft_tree = build_craft_tree(lid, mystic_map)
-        acq_methods = item_det.get("acquisitionMethods", [])
+        acq_methods = item_det.get("acquisitionMethods") or []
 
         leg_obj = {
             "id": lid,
@@ -228,6 +345,7 @@ def main():
     conn = init_sqlite_db(args.db)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM skins")
+    cursor.execute("DELETE FROM containers")
     cursor.execute("DELETE FROM legendaries")
 
     skin_db_rows = []
@@ -235,10 +353,11 @@ def main():
 
     for sid in sorted(skin_results.keys()):
         data = skin_results[sid]
-        skin_info = data.get("skin", {})
-        acq_methods = data.get("acquisitionMethods", [])
-        used_in = data.get("usedIn", [])
-        keywords = data.get("keywords", "")
+        skin_info = data.get("skin") or {}
+        acq_methods = data.get("acquisitionMethods") or []
+        used_in = data.get("usedIn") or []
+        keywords = data.get("keywords") or ""
+        skin_containers = data.get("containers") or []
 
         s_name = skin_info.get("name", "")
         s_type = skin_info.get("type", "")
@@ -249,6 +368,7 @@ def main():
 
         acq_json = json.dumps(acq_methods, ensure_ascii=False)
         used_in_json = json.dumps(used_in, ensure_ascii=False)
+        containers_json = json.dumps(skin_containers, ensure_ascii=False)
         full_json = json.dumps(data, ensure_ascii=False)
 
         skin_db_rows.append((
@@ -260,6 +380,7 @@ def main():
             keywords_str,
             acq_json,
             used_in_json,
+            containers_json,
             full_json
         ))
 
@@ -271,14 +392,31 @@ def main():
             "icon": s_icon,
             "keywords": keywords,
             "acquisitionMethods": acq_methods,
+            "containers": skin_containers,
             "usedIn": used_in,
             "raw": data
         })
 
     cursor.executemany("""
-        INSERT INTO skins (id, name, type, rarity, icon, keywords, acquisition_methods_json, used_in_json, full_data_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO skins (id, name, type, rarity, icon, keywords, acquisition_methods_json, used_in_json, containers_json, full_data_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, skin_db_rows)
+
+    container_db_rows = []
+    for c in container_list:
+        container_db_rows.append((
+            c["id"],
+            c["name"],
+            c["icon"],
+            1 if c["isTpItem"] else 0,
+            json.dumps(c["skins"], ensure_ascii=False),
+            json.dumps(c, ensure_ascii=False)
+        ))
+
+    cursor.executemany("""
+        INSERT INTO containers (id, name, icon, is_tp_item, contained_skins_json, full_data_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, container_db_rows)
 
     leg_db_rows = []
     for leg in leg_results:
@@ -302,10 +440,11 @@ def main():
 
     conn.commit()
     conn.close()
-    print(f"Base SQLite mise a jour ({len(skin_db_rows)} skins, {len(leg_db_rows)} legendaires).")
+    print(f"Base SQLite mise a jour ({len(skin_db_rows)} skins, {len(container_db_rows)} caisses, {len(leg_db_rows)} legendaires).")
 
     full_output = {
         "skins": skin_json_export,
+        "containers": container_list,
         "legendaries": leg_results
     }
 
