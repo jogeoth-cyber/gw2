@@ -6,7 +6,7 @@ rem Handle UNC network paths (e.g. \\JOJO\share\...)
 pushd "%~dp0"
 
 echo ========================================================
-echo   GW2 Skins & Legendary Craft Scraper (gw2.app)
+echo   GW2 Skins, Caisses & Legendary Craft Scraper
 echo ========================================================
 echo.
 
@@ -19,14 +19,14 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo Starting skin unlock and legendary crafting extraction...
+echo Starting modular extraction across all categories...
 echo.
 
-python scrape_gw2_skins.py --workers 20 --lang fr
+python scrape_all.py --workers 20 --lang fr
 
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] An error occurred while executing scrape_gw2_skins.py.
+    echo [ERROR] An error occurred while executing scrape_all.py.
     popd
     pause
     exit /b %errorlevel%
@@ -37,6 +37,7 @@ echo ========================================================
 echo Extraction completed successfully!
 echo SQLite database: gw2_skins_unlocks.db
 echo JSON file:       gw2_skins_unlocks.json
+echo JS file:         gw2_skins_unlocks.js
 echo ========================================================
 echo.
 echo You can now launch run_web_interface.bat to open the web UI.
