@@ -124,7 +124,7 @@ def build_craft_tree(item_id, mystic_map, depth=0, max_depth=3):
         })
     return tree
 
-def extract_containers_from_acquisition(acq_methods):
+def extract_containers_and_outputs(acq_methods, skin_info, sid):
     containers = []
     seen_ids = set()
 
@@ -140,23 +140,34 @@ def extract_containers_from_acquisition(acq_methods):
             if cid and cid not in seen_ids:
                 seen_ids.add(cid)
                 citem = c.get("item") if isinstance(c.get("item"), dict) else {}
+                output_name = skin_info.get("name", "")
+                if ci.get("output_item") and isinstance(ci["output_item"], dict):
+                    output_name = ci["output_item"].get("name", output_name)
+
                 containers.append({
                     "id": cid,
                     "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
                     "icon": citem.get("icon") or c.get("icon", ""),
                     "isTpItem": citem.get("isTpItem", False),
-                    "description": citem.get("description", "")
+                    "description": citem.get("description", ""),
+                    "output_item_name": output_name,
+                    "skin_id": sid,
+                    "skin_name": skin_info.get("name", ""),
+                    "skin_icon": skin_info.get("icon", "")
                 })
 
         # 2. Vendoritem with container/chest ingredients
-        vi = m.get("vendoritem")
-        if isinstance(vi, dict):
-            for ing_item in (vi.get("ingredient_items") or []):
+        vitem = m.get("vendoritem")
+        if isinstance(vitem, dict):
+            output_name = skin_info.get("name", "")
+            if vitem.get("output_item") and isinstance(vitem["output_item"], dict):
+                output_name = vitem["output_item"].get("name", output_name)
+
+            for ing_item in (vitem.get("ingredient_items") or []):
                 if not isinstance(ing_item, dict):
                     continue
                 itype = ing_item.get("type", "")
                 iname = ing_item.get("name", "")
-                # Check if ingredient is a container/box/gizmo/chest
                 if itype in ["Container", "Gizmo"] or any(k in iname.lower() for k in ["boîte", "boite", "caisse", "coffre", "pack"]):
                     cid = ing_item.get("id")
                     if cid and cid not in seen_ids:
@@ -166,7 +177,11 @@ def extract_containers_from_acquisition(acq_methods):
                             "name": iname,
                             "icon": ing_item.get("icon", ""),
                             "isTpItem": ing_item.get("isTpItem", False),
-                            "description": ing_item.get("description", "")
+                            "description": ing_item.get("description", ""),
+                            "output_item_name": output_name,
+                            "skin_id": sid,
+                            "skin_name": skin_info.get("name", ""),
+                            "skin_icon": skin_info.get("icon", "")
                         })
 
         # 3. Item that itself comes from a container/box
@@ -182,7 +197,11 @@ def extract_containers_from_acquisition(acq_methods):
                     "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
                     "icon": citem.get("icon") or c.get("icon", ""),
                     "isTpItem": citem.get("isTpItem", False),
-                    "description": citem.get("description", "")
+                    "description": citem.get("description", ""),
+                    "output_item_name": item_obj.get("name", skin_info.get("name", "")),
+                    "skin_id": sid,
+                    "skin_name": skin_info.get("name", ""),
+                    "skin_icon": skin_info.get("icon", "")
                 })
 
     return containers
@@ -242,16 +261,16 @@ def main():
     # PART 2: CONTAINERS / CHESTS / CAISSES EXTRACTION
     # -------------------------------------------------------------
     print("\n[2/3] Indexation des caisses, boites et coffres d'apparences...")
-    container_map = {}  # cid -> { id, name, icon, isTpItem, skins: [] }
+    container_map = {}  # cid -> { id, name, icon, isTpItem, items: [], skins: [] }
 
     for sid, sdata in skin_results.items():
         sinfo = sdata.get("skin") or {}
         acq_methods = sdata.get("acquisitionMethods") or []
 
-        skin_containers = extract_containers_from_acquisition(acq_methods)
+        skin_containers = extract_containers_and_outputs(acq_methods, sinfo, sid)
         sdata["containers"] = skin_containers
 
-        # Map container -> skin
+        # Map container -> list of output items/skins
         for c in skin_containers:
             cid = c["id"]
             if cid not in container_map:
@@ -261,15 +280,45 @@ def main():
                     "icon": c["icon"],
                     "isTpItem": c["isTpItem"],
                     "description": c.get("description", ""),
+                    "items": [],
                     "skins": []
                 }
+
+            output_name = c.get("output_item_name") or sinfo.get("name", "")
+            if output_name and output_name not in container_map[cid]["items"]:
+                container_map[cid]["items"].append(output_name)
+
             container_map[cid]["skins"].append({
                 "id": sid,
                 "name": sinfo.get("name", ""),
+                "output_name": output_name,
                 "type": sinfo.get("type", ""),
                 "rarity": sinfo.get("rarity", ""),
                 "icon": sinfo.get("icon", "")
             })
+
+    # Optional: fetch details for known major containers (e.g. Boîte d'outils récupérés 106159) if present
+    container_ids_to_check = [106159]
+    for cid in container_ids_to_check:
+        if cid not in container_map:
+            cdata = fetch_item_details(cid, args.lang)
+            if cdata and cdata.get("item"):
+                item_info = cdata["item"]
+                outputs = []
+                for u in (cdata.get("usedIn") or []):
+                    vitem = u.get("vendoritem")
+                    if vitem and vitem.get("output_item"):
+                        outputs.append(vitem["output_item"].get("name"))
+
+                container_map[cid] = {
+                    "id": cid,
+                    "name": item_info.get("name", ""),
+                    "icon": item_info.get("icon", ""),
+                    "isTpItem": item_info.get("isTpItem", False),
+                    "description": item_info.get("description", ""),
+                    "items": outputs,
+                    "skins": []
+                }
 
     container_list = list(container_map.values())
     print(f"Total de caisses/boites/coffres d'apparences indexes : {len(container_list)}")
@@ -409,7 +458,7 @@ def main():
             c["name"],
             c["icon"],
             1 if c["isTpItem"] else 0,
-            json.dumps(c["skins"], ensure_ascii=False),
+            json.dumps(c.get("items") or c.get("skins") or [], ensure_ascii=False),
             json.dumps(c, ensure_ascii=False)
         ))
 
