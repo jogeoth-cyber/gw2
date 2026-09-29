@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Guild Wars 2 - Explorateur de Skins et Craft Légendaire</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="gw2_skins_unlocks.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -75,15 +76,30 @@
     <!-- Status / Loading Indicator -->
     <div id="loadingBox" class="bg-slate-800/80 border border-slate-700 rounded-xl p-8 text-center my-12 shadow-xl">
       <div class="inline-block animate-spin text-3xl text-yellow-400 mb-3">⏳</div>
-      <h2 class="text-lg font-semibold text-slate-200 mb-1">Chargement des données...</h2>
-      <p class="text-sm text-slate-400">Lecture de <code class="text-yellow-300">gw2_skins_unlocks.json</code> en cours</p>
+      <h2 class="text-lg font-semibold text-slate-200 mb-1">Chargement de la base de données...</h2>
+      <p class="text-sm text-slate-400">Lecture de <code class="text-yellow-300">gw2_skins_unlocks.js</code> / <code class="text-yellow-300">json</code></p>
     </div>
 
     <!-- Error Box -->
-    <div id="errorBox" class="hidden bg-red-950/50 border border-red-800 text-red-200 rounded-xl p-6 my-8 text-center">
-      <p class="font-semibold text-lg mb-2">❌ Fichier de données introuvable !</p>
-      <p class="text-sm mb-4">Veuillez exécuter <code class="bg-slate-900 px-2 py-1 rounded text-yellow-300">scrape_gw2_skins.py</code> ou lancer <code class="bg-slate-900 px-2 py-1 rounded text-yellow-300">run_scrape_skins.bat</code> pour générer la base.</p>
-      <button onclick="loadData()" class="px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm transition">Réessayer</button>
+    <div id="errorBox" class="hidden bg-red-950/50 border border-red-800 text-red-200 rounded-xl p-6 my-8 text-center max-w-2xl mx-auto shadow-2xl">
+      <p class="font-semibold text-xl mb-2 text-red-400">❌ Base de données introuvable ou bloquée par le navigateur !</p>
+      <p class="text-sm text-slate-300 mb-4 leading-relaxed">
+        Veuillez exécuter <code class="bg-slate-900 px-2 py-1 rounded text-yellow-300 font-mono">run_scrape_skins.bat</code> pour générer la base.
+      </p>
+      <p class="text-xs text-slate-400 mb-6">
+        Note : Si vous ouvrez cette page en double-cliquant dessus (fichier <code class="text-yellow-400">file://</code>), vous pouvez utiliser le bouton ci-dessous pour charger le fichier JSON directement ou lancer <code class="text-yellow-400">run_web_interface.bat</code>.
+      </p>
+
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <label class="cursor-pointer px-5 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg flex items-center space-x-2">
+          <span>📂 Choisir le fichier gw2_skins_unlocks.json</span>
+          <input type="file" id="jsonFileInput" accept=".json" onchange="loadFromFile(event)" class="hidden">
+        </label>
+
+        <button onclick="loadData()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-medium rounded-xl text-sm transition">
+          🔄 Réessayer
+        </button>
+      </div>
     </div>
 
     <!-- TAB 1: SKINS & UNLOCKS -->
@@ -175,23 +191,53 @@
       document.getElementById('loadingBox').classList.remove('hidden');
       document.getElementById('errorBox').classList.add('hidden');
 
+      // 1. Try global window.GW2_SKINS_DB from gw2_skins_unlocks.js
+      if (window.GW2_SKINS_DB && (window.GW2_SKINS_DB.skins || window.GW2_SKINS_DB.legendaries)) {
+        console.log("Loaded data from window.GW2_SKINS_DB script tag.");
+        dbData = window.GW2_SKINS_DB;
+        initUI();
+        return;
+      }
+
+      // 2. Try fetching gw2_skins_unlocks.json
       try {
         const resp = await fetch('gw2_skins_unlocks.json');
         if (!resp.ok) throw new Error('Http ' + resp.status);
         dbData = await resp.json();
-
-        document.getElementById('loadingBox').classList.add('hidden');
-        document.getElementById('countSkins').innerText = dbData.skins ? dbData.skins.length : 0;
-        document.getElementById('countLeg').innerText = dbData.legendaries ? dbData.legendaries.length : 0;
-
-        switchTab('skins');
-        filterSkins();
-        filterLegendaries();
+        console.log("Loaded data from gw2_skins_unlocks.json fetch.");
+        initUI();
       } catch (e) {
-        console.error(e);
+        console.warn("Could not fetch gw2_skins_unlocks.json directly:", e);
         document.getElementById('loadingBox').classList.add('hidden');
         document.getElementById('errorBox').classList.remove('hidden');
       }
+    }
+
+    function loadFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          dbData = JSON.parse(e.target.result);
+          document.getElementById('errorBox').classList.add('hidden');
+          initUI();
+        } catch (err) {
+          alert("Erreur lors de la lecture du fichier JSON : " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function initUI() {
+      document.getElementById('loadingBox').classList.add('hidden');
+      document.getElementById('countSkins').innerText = dbData.skins ? dbData.skins.length : 0;
+      document.getElementById('countLeg').innerText = dbData.legendaries ? dbData.legendaries.length : 0;
+
+      switchTab('skins');
+      filterSkins();
+      filterLegendaries();
     }
 
     function switchTab(tab) {

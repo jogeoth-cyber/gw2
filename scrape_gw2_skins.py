@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Script de récupération des skins (et leurs déblocages) ainsi que de l'Armurerie Légendaire (et leurs recettes de craft) depuis GW2.app.
-Génère une base SQLite (ultra-rapide à lire) et un fichier JSON complet.
+Génère une base SQLite, un fichier JSON et un fichier JavaScript (.js) pour compatibilité navigateur directe (file://).
 """
 
 import os
@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_URL = "https://gw2.app/api/v1"
 DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
 DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
+DEFAULT_JS_PATH = "gw2_skins_unlocks.js"
 DEFAULT_WORKERS = 20
 
 def fetch_json(url, timeout=12):
@@ -113,6 +114,7 @@ def main():
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Nombre de threads concurrents")
     parser.add_argument("--db", type=str, default=DEFAULT_DB_PATH, help="Chemin du fichier SQLite")
     parser.add_argument("--json", type=str, default=DEFAULT_JSON_PATH, help="Chemin du fichier JSON")
+    parser.add_argument("--js", type=str, default=DEFAULT_JS_PATH, help="Chemin du fichier JS")
     parser.add_argument("--lang", type=str, default="fr", help="Langue (fr, en, de, es)")
     args = parser.parse_args()
 
@@ -220,7 +222,7 @@ def main():
     print(f"Armurerie Legendaire integree ({len(leg_results)} objets traités).")
 
     # -------------------------------------------------------------
-    # SAVE TO SQLITE & JSON
+    # SAVE TO SQLITE, JSON & JS
     # -------------------------------------------------------------
     print(f"\n[SAUVEGARDE] Enregistrement dans SQLite ({args.db})...")
     conn = init_sqlite_db(args.db)
@@ -302,15 +304,23 @@ def main():
     conn.close()
     print(f"Base SQLite mise a jour ({len(skin_db_rows)} skins, {len(leg_db_rows)} legendaires).")
 
-    print(f"Exportation du fichier JSON ({args.json})...")
     full_output = {
         "skins": skin_json_export,
         "legendaries": leg_results
     }
+
+    print(f"Exportation du fichier JSON ({args.json})...")
     with open(args.json, "w", encoding="utf-8") as f:
         json.dump(full_output, f, ensure_ascii=False, indent=2)
-
     print(f"JSON sauvegarde ({os.path.getsize(args.json) / (1024*1024):.2f} MB).")
+
+    print(f"Exportation du fichier JS ({args.js})...")
+    with open(args.js, "w", encoding="utf-8") as f:
+        f.write("window.GW2_SKINS_DB = ")
+        json.dump(full_output, f, ensure_ascii=False)
+        f.write(";")
+    print(f"JS sauvegarde ({os.path.getsize(args.js) / (1024*1024):.2f} MB).")
+
     print("\nExtraction terminee avec succes!")
 
 if __name__ == "__main__":
