@@ -67,7 +67,7 @@
           📦 Caisses & Coffres (<span id="countContainers">0</span>)
         </button>
         <button id="tabBtnUnlocksTree" onclick="switchTab('unlocksTree')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
-          🔍 Recherche Élément (<span id="countUnlocksTree">0</span>)
+          🔍 Arbre Parents Multi-Niveaux (<span id="countUnlocksTree">0</span>)
         </button>
         <button id="tabBtnLeg" onclick="switchTab('legendaries')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
           🔮 Légendaires (<span id="countLeg">0</span>)
@@ -181,18 +181,18 @@
       <div id="containersGrid" class="grid grid-cols-1 gap-6"></div>
     </section>
 
-    <!-- TAB 3: UNLOCKS TREE / RECHERCHE ÉLÉMENT PARENT -->
+    <!-- TAB 3: MULTI-LEVEL UNLOCKS TREE / ARBORESCENCE MULTI-NIVEAUX PARENTS -->
     <section id="secUnlocksTree" class="hidden space-y-6">
       <!-- Search & Filters -->
       <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
         <div class="flex-grow min-w-[260px]">
-          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche Élément Parent (Boîte, Coffre, Succès, Collection)</label>
-          <input type="text" id="unlocksTreeSearch" oninput="filterUnlocksTree()" placeholder="Tapez un nom d'élément parent : ex. Boîte d'outils, Succès, Armures, Choix..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 text-slate-100 placeholder-slate-500">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche Multi-Niveaux (Élément, Skin, Boîte, Collection, Succès)</label>
+          <input type="text" id="unlocksTreeSearch" oninput="filterUnlocksTree()" placeholder="Tapez un nom d'élément : ex. Arc court, Boîte d'outils, Fast Constructor, Succès..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 text-slate-100 placeholder-slate-500">
         </div>
 
         <div class="flex items-end pb-0.5">
           <span id="unlocksTreeMatchingCount" class="text-xs text-blue-300 font-medium bg-blue-950/40 px-3 py-2.5 rounded-xl border border-blue-800/50">
-            0 élément(s) parent(s) affiché(s)
+            0 élément(s) affiché(s)
           </span>
         </div>
       </div>
@@ -564,57 +564,85 @@
       }).join('');
     }
 
-    // --- UNLOCKS TREE RENDER (TAB 3) ---
+    // --- MULTI-LEVEL UNLOCKS TREE RENDER (TAB 3) ---
     function filterUnlocksTree() {
       const query = document.getElementById('unlocksTreeSearch').value.toLowerCase().trim();
 
       const filtered = (dbData.unlocks_tree || []).filter(t => {
         if (query) {
-          const matchParent = t.name && t.name.toLowerCase().includes(query);
+          const matchName = t.name && t.name.toLowerCase().includes(query);
+          const matchAncestors = t.ancestors_chain && t.ancestors_chain.some(a => a.name && a.name.toLowerCase().includes(query));
           const matchChildren = t.children && t.children.some(ch => ch.name && ch.name.toLowerCase().includes(query));
-          if (!matchParent && !matchChildren) return false;
+          if (!matchName && !matchAncestors && !matchChildren) return false;
         }
         return true;
       });
 
-      document.getElementById('unlocksTreeMatchingCount').innerText = `${filtered.length} élément(s) parent(s) affiché(s)`;
-      renderUnlocksTree(filtered);
+      document.getElementById('unlocksTreeMatchingCount').innerText = `${filtered.length} élément(s) affiché(s)`;
+      renderUnlocksTree(filtered.slice(0, 100));
+    }
+
+    function renderAncestorChainHtml(ancestorList) {
+      if (!ancestorList || ancestorList.length === 0) return '';
+
+      return `<div class="bg-blue-950/40 border border-blue-800/50 rounded-xl p-3 my-2 space-y-2">
+        <p class="text-[11px] font-bold text-blue-300 uppercase tracking-wider flex items-center space-x-1">
+          <span>⬆️ Arborescence des Parents Multi-Niveaux jusqu'à la Racine :</span>
+        </p>
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          ${ancestorList.map(a => {
+            const higherChain = a.higher_parents ? renderAncestorChainHtml(a.higher_parents) : '';
+            return `
+              <div class="flex items-center space-x-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-blue-700/60 text-blue-200 cursor-pointer hover:border-blue-400 transition" onclick="openItemModalByObject('${escapeHtml(a.name)}', '${escapeHtml(a.icon || '')}', 'Exotic')">
+                <img src="${a.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded">
+                <span class="font-semibold">${escapeHtml(a.name)}</span>
+                <span class="text-[9px] text-blue-400 bg-blue-950 px-1 rounded">${escapeHtml(a.type || 'Parent')}</span>
+              </div>
+              <span class="text-slate-500 font-bold">⬆️</span>
+              ${higherChain}
+            `;
+          }).join('')}
+        </div>
+      </div>`;
     }
 
     function renderUnlocksTree(list) {
       const container = document.getElementById('unlocksTreeGrid');
       if (list.length === 0) {
-        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucun élément parent ne correspond aux critères.</div>`;
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucun élément ne correspond aux critères.</div>`;
         return;
       }
 
       container.innerHTML = list.map(t => {
         const children = t.children || [];
+        const ancestorsHtml = renderAncestorChainHtml(t.ancestors_chain);
 
         return `
           <div class="bg-gwCard border border-blue-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
             <div>
-              <div class="flex items-center space-x-4 mb-4 pb-3 border-b border-slate-800">
+              <div class="flex items-center space-x-4 mb-3 pb-3 border-b border-slate-800">
                 <img src="${t.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-blue-950/40 border border-blue-700/50 object-cover flex-shrink-0 shadow" alt="">
                 <div>
                   <h3 class="font-bold text-base text-blue-300 tracking-wide">${escapeHtml(t.name)}</h3>
                   <div class="flex items-center space-x-2 mt-1">
-                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-blue-950 text-blue-200 border border-blue-800">${escapeHtml(t.type || 'Élément Parent')}</span>
+                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-blue-950 text-blue-200 border border-blue-800">${escapeHtml(t.type || 'Élément')}</span>
                   </div>
                 </div>
               </div>
 
+              ${ancestorsHtml}
+
               ${t.description ? `<p class="text-xs text-slate-400 italic mb-3 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">${escapeHtml(t.description)}</p>` : ''}
 
               <div>
-                <h4 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">✨ Éléments & Skins débloqués sous cet élément (${children.length}) :</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+                <h4 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">⬇️ Sous-Éléments & Skins débloqués sous cet élément (${children.length}) :</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
                   ${children.map(ch => `
-                    <div class="flex items-center space-x-2.5 bg-slate-950/90 border border-slate-800 hover:border-blue-500/60 p-2 rounded-xl cursor-pointer transition shadow-sm group" onclick="openItemModalByObject('${escapeHtml(ch.name)}', '${escapeHtml(ch.icon || '')}', '${ch.rarity || 'Exotic'}')">
-                      <img src="${ch.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-8 h-8 rounded-lg border border-slate-700 object-cover flex-shrink-0 group-hover:border-blue-400 transition">
+                    <div class="flex items-center space-x-2.5 bg-slate-950/90 border border-slate-800 hover:border-blue-500/60 p-2 rounded-xl cursor-pointer transition shadow-sm group" onclick="openItemModalByObject('${escapeHtml(ch.name)}', '${escapeHtml(ch.details ? ch.details.icon || '' : '')}', '${ch.details ? ch.details.rarity || 'Exotic' : 'Exotic'}')">
+                      <img src="${ch.details && ch.details.icon ? ch.details.icon : 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-8 h-8 rounded-lg border border-slate-700 object-cover flex-shrink-0 group-hover:border-blue-400 transition">
                       <div class="overflow-hidden">
                         <p class="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300 transition">${escapeHtml(ch.name)}</p>
-                        <span class="text-[10px] text-slate-500 uppercase">${ch.type || 'Skin'}</span>
+                        <span class="text-[10px] text-slate-500 uppercase">${ch.details ? ch.details.type || 'Skin' : 'Skin'}</span>
                       </div>
                     </div>
                   `).join('')}
@@ -623,7 +651,7 @@
             </div>
 
             <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
-              <span>ID Parent : #${t.id || 'N/A'}</span>
+              <span>ID Élément : #${t.id || 'N/A'}</span>
             </div>
           </div>
         `;
