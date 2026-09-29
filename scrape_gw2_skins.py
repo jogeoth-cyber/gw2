@@ -124,7 +124,7 @@ def build_craft_tree(item_id, mystic_map, depth=0, max_depth=3):
         })
     return tree
 
-def extract_containers_and_outputs(acq_methods, skin_info, sid):
+def extract_containers_and_outputs(acq_methods, skin_info, sid, item_cache=None, lang="fr"):
     containers = []
     seen_ids = set()
 
@@ -200,31 +200,67 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
                             "output_item": output_obj
                         })
 
-        # 3. Item that itself comes from a container/box
+        # 3. Item that itself comes from a container/box (Trace Item -> Container)
         item_obj = m.get("item")
-        if isinstance(item_obj, dict) and isinstance(item_obj.get("container"), dict):
-            c = item_obj["container"]
-            cid = c.get("item_id") or c.get("id")
-            if cid and cid not in seen_ids:
-                seen_ids.add(cid)
-                citem = c.get("item") if isinstance(c.get("item"), dict) else {}
-                output_obj = {
-                    "id": item_obj.get("id"),
-                    "name": item_obj.get("name", skin_info.get("name", "")),
-                    "icon": item_obj.get("icon", skin_info.get("icon", "")),
-                    "rarity": item_obj.get("rarity", "Exotic"),
-                    "type": item_obj.get("type", ""),
-                    "skin_id": sid,
-                    "default_skin": item_obj.get("default_skin")
-                }
-                containers.append({
-                    "id": cid,
-                    "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
-                    "icon": citem.get("icon") or c.get("icon", ""),
-                    "isTpItem": citem.get("isTpItem", False),
-                    "description": citem.get("description", ""),
-                    "output_item": output_obj
-                })
+        if isinstance(item_obj, dict):
+            iid = item_obj.get("id")
+            if iid and item_cache is not None:
+                if iid not in item_cache:
+                    item_cache[iid] = fetch_item_details(iid, lang)
+                idata = item_cache.get(iid)
+                if idata and isinstance(idata, dict):
+                    for im in (idata.get("acquisitionMethods") or []):
+                        if not isinstance(im, dict):
+                            continue
+                        if im.get("containeritem") and isinstance(im["containeritem"].get("container"), dict):
+                            c = im["containeritem"]["container"]
+                            cid = c.get("item_id") or c.get("id")
+                            if cid and cid not in seen_ids:
+                                seen_ids.add(cid)
+                                citem = c.get("item") if isinstance(c.get("item"), dict) else {}
+                                containers.append({
+                                    "id": cid,
+                                    "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
+                                    "icon": citem.get("icon") or c.get("icon", ""),
+                                    "isTpItem": citem.get("isTpItem", False),
+                                    "description": citem.get("description", ""),
+                                    "output_item": {
+                                        "id": iid,
+                                        "name": item_obj.get("name", skin_info.get("name", "")),
+                                        "icon": item_obj.get("icon", skin_info.get("icon", "")),
+                                        "rarity": item_obj.get("rarity", "Exotic"),
+                                        "type": item_obj.get("type", ""),
+                                        "skin_id": sid,
+                                        "default_skin": item_obj.get("default_skin")
+                                    }
+                                })
+                        if im.get("vendoritem") and isinstance(im["vendoritem"], dict):
+                            vitem_sub = im["vendoritem"]
+                            for ing_sub in (vitem_sub.get("ingredient_items") or []):
+                                if not isinstance(ing_sub, dict):
+                                    continue
+                                itype_sub = ing_sub.get("type", "")
+                                iname_sub = ing_sub.get("name", "")
+                                if itype_sub in ["Container", "Gizmo"] or any(k in iname_sub.lower() for k in ["boîte", "boite", "caisse", "coffre", "pack"]):
+                                    cid = ing_sub.get("id")
+                                    if cid and cid not in seen_ids:
+                                        seen_ids.add(cid)
+                                        containers.append({
+                                            "id": cid,
+                                            "name": iname_sub,
+                                            "icon": ing_sub.get("icon", ""),
+                                            "isTpItem": ing_sub.get("isTpItem", False),
+                                            "description": ing_sub.get("description", ""),
+                                            "output_item": {
+                                                "id": iid,
+                                                "name": item_obj.get("name", skin_info.get("name", "")),
+                                                "icon": item_obj.get("icon", skin_info.get("icon", "")),
+                                                "rarity": item_obj.get("rarity", "Exotic"),
+                                                "type": item_obj.get("type", ""),
+                                                "skin_id": sid,
+                                                "default_skin": item_obj.get("default_skin")
+                                            }
+                                        })
 
     return containers
 
@@ -284,12 +320,13 @@ def main():
     # -------------------------------------------------------------
     print("\n[2/3] Indexation des caisses, boites et coffres d'apparences...")
     container_map = {}  # cid -> { id, name, icon, isTpItem, items: [] }
+    item_cache = {}
 
     for sid, sdata in skin_results.items():
         sinfo = sdata.get("skin") or {}
         acq_methods = sdata.get("acquisitionMethods") or []
 
-        skin_containers = extract_containers_and_outputs(acq_methods, sinfo, sid)
+        skin_containers = extract_containers_and_outputs(acq_methods, sinfo, sid, item_cache, args.lang)
         sdata["containers"] = skin_containers
 
         # Map container -> list of output item objects
@@ -307,39 +344,8 @@ def main():
 
             out_obj = c.get("output_item")
             if out_obj and isinstance(out_obj, dict):
-                # Avoid duplicate items inside container
                 if not any(it.get("name") == out_obj.get("name") for it in container_map[cid]["items"]):
                     container_map[cid]["items"].append(out_obj)
-
-    # Optional: fetch details for known major containers (e.g. Boîte d'outils récupérés 106159) if present
-    container_ids_to_check = [106159]
-    for cid in container_ids_to_check:
-        if cid not in container_map or len(container_map[cid]["items"]) <= 1:
-            cdata = fetch_item_details(cid, args.lang)
-            if cdata and cdata.get("item"):
-                item_info = cdata["item"]
-                outputs = []
-                for u in (cdata.get("usedIn") or []):
-                    vitem = u.get("vendoritem")
-                    if vitem and vitem.get("output_item"):
-                        out = vitem["output_item"]
-                        outputs.append({
-                            "id": out.get("id"),
-                            "name": out.get("name"),
-                            "icon": out.get("icon"),
-                            "rarity": out.get("rarity", "Exotic"),
-                            "type": out.get("type", ""),
-                            "default_skin": out.get("default_skin")
-                        })
-
-                container_map[cid] = {
-                    "id": cid,
-                    "name": item_info.get("name", ""),
-                    "icon": item_info.get("icon", ""),
-                    "isTpItem": item_info.get("isTpItem", False),
-                    "description": item_info.get("description", ""),
-                    "items": outputs
-                }
 
     container_list = list(container_map.values())
     print(f"Total de caisses/boites/coffres d'apparences indexes : {len(container_list)}")
