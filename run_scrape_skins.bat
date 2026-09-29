@@ -1,4 +1,15 @@
 @echo off
+chcp 65001 >nul
+
+:: Verification si lance depuis un dossier reseau / chemin UNC
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~0,2%"=="\\" (
+    if exist Y:\ net use Y: /delete /yes >nul 2>&1
+    net use Y: "%~dp0..\.." /persistent:no >nul 2>&1
+    Z:
+    cd \
+) else (
+    cd /d "%~dp0..\.."
 setlocal
 title GW2 Skins Unlocks Database Generator
 
