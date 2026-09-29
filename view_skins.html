@@ -212,6 +212,55 @@
 
   </main>
 
+  <!-- MERCHANT STYLE PREVIEW POPUP MODAL -->
+  <div id="itemModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-gwCard border border-amber-600/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative animate-fade-in">
+
+      <!-- Close Button -->
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-900 w-8 h-8 rounded-full border border-slate-700 flex items-center justify-center font-bold transition">
+        ✕
+      </button>
+
+      <!-- Modal Content Header -->
+      <div class="flex items-center space-x-4 mb-4 pb-4 border-b border-slate-800">
+        <img id="modalIcon" src="" class="w-16 h-16 rounded-2xl bg-slate-900 border border-amber-500/50 object-cover shadow-lg" alt="">
+        <div>
+          <h3 id="modalTitle" class="font-bold text-lg text-yellow-300">Nom de l'objet</h3>
+          <div class="flex items-center space-x-2 mt-1">
+            <span id="modalRarityBadge" class="text-xs uppercase font-bold px-2.5 py-0.5 rounded-md badge-Exotic">Exotique</span>
+            <span id="modalType" class="text-xs text-slate-400">Type</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Details -->
+      <div class="space-y-4">
+        <div>
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Informations d'obtention</h4>
+          <div id="modalDescription" class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 leading-relaxed">
+            Double-cliquez pour débloquer l'apparence.
+          </div>
+        </div>
+
+        <div id="modalSkinsBox">
+          <h4 class="text-xs font-semibold text-yellow-400 uppercase tracking-wider mb-1">✨ Skin associé à débloquer</h4>
+          <div id="modalSkinContent" class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-200">
+            <!-- Skin details inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
+        <span id="modalItemId">ID Item : #</span>
+        <button onclick="closeModal()" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-slate-950 font-bold rounded-xl transition">
+          Fermer (Échap)
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <footer class="bg-gwCard border-t border-gwCardBorder py-6 text-center text-xs text-slate-500">
     <p>Guild Wars 2 Skin, Container & Legendary Explorer • Données extraites depuis GW2.app API</p>
   </footer>
@@ -339,8 +388,8 @@
         if (acqList.length > 0) {
           unlockHtml = acqList.slice(0, 4).map(m => {
             if (m.item) {
-              return `<li class="flex items-center space-x-2 text-xs text-slate-300 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                <img src="${m.item.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-5 h-5 rounded">
+              return `<li class="flex items-center space-x-2 text-xs text-slate-300 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800 cursor-pointer hover:border-yellow-500/50 transition" onclick="openItemModalByName('${escapeHtml(m.item.name)}')">
+                <img src="${m.item.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-5 h-5 rounded object-cover">
                 <span class="truncate">${escapeHtml(m.item.name)}</span>
               </li>`;
             } else if (m.achievement) {
@@ -361,7 +410,7 @@
               ${containers.map(c => `
                 <li class="flex items-center justify-between text-xs bg-amber-950/30 border border-amber-800/40 p-1.5 rounded-lg">
                   <div class="flex items-center space-x-2 truncate">
-                    <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded">
+                    <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded object-cover">
                     <span class="truncate text-amber-200">${escapeHtml(c.name)}</span>
                   </div>
                   ${c.isTpItem ? `<span class="text-[9px] bg-green-950 text-green-300 px-1.5 py-0.5 rounded border border-green-800 flex-shrink-0 font-bold">TP</span>` : ''}
@@ -374,10 +423,10 @@
         return `
           <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-slate-600 transition rarity-${rarity}">
             <div>
-              <div class="flex items-start space-x-3 mb-3">
-                <img src="${s.icon || ''}" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 object-cover flex-shrink-0" alt="">
+              <div class="flex items-start space-x-3 mb-3 cursor-pointer" onclick="openSkinModal(${s.id})">
+                <img src="${s.icon || ''}" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 object-cover flex-shrink-0 shadow" alt="">
                 <div class="overflow-hidden">
-                  <h3 class="font-bold text-sm text-slate-100 truncate" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</h3>
+                  <h3 class="font-bold text-sm text-slate-100 truncate hover:text-yellow-400 transition" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</h3>
                   <div class="flex items-center space-x-2 mt-1">
                     <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md badge-${rarity}">${rarity}</span>
                     <span class="text-xs text-slate-400">${s.type || 'Skin'}</span>
@@ -414,7 +463,7 @@
 
         if (query) {
           const matchName = c.name && c.name.toLowerCase().includes(query);
-          const matchItems = c.items && c.items.some(item => item && item.toLowerCase().includes(query));
+          const matchItems = c.items && c.items.some(item => (typeof item === 'string' ? item : item.name).toLowerCase().includes(query));
           const matchSkins = c.skins && c.skins.some(s => s.name && s.name.toLowerCase().includes(query));
           if (!matchName && !matchItems && !matchSkins) return false;
         }
@@ -433,14 +482,13 @@
       }
 
       container.innerHTML = list.map(c => {
-        const items = c.items && c.items.length > 0 ? c.items : (c.skins || []).map(s => s.output_name || s.name);
-        const formattedItems = items.map(i => escapeHtml(i)).join(' <span class="text-amber-500/60 font-bold px-1">/</span> ');
+        const rawItems = c.items && c.items.length > 0 ? c.items : (c.skins || []);
 
         return `
           <div class="bg-gwCard border border-amber-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
             <div>
               <div class="flex items-center space-x-4 mb-4 pb-3 border-b border-slate-800">
-                <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-700/50 object-cover flex-shrink-0" alt="">
+                <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-700/50 object-cover flex-shrink-0 shadow" alt="">
                 <div>
                   <h3 class="font-bold text-base text-amber-300 tracking-wide">${escapeHtml(c.name)}</h3>
                   <div class="flex items-center space-x-2 mt-1">
@@ -452,11 +500,26 @@
                 </div>
               </div>
 
-              <!-- List of items / skins contained directly below -->
+              <!-- List of items / skins contained directly below as visual cards -->
               <div class="mt-2">
-                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Armes & Skins contenus (${items.length}) :</h4>
-                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-sm leading-relaxed text-slate-200">
-                  ${formattedItems || '<span class="text-slate-500 italic">Aucune liste d\'objets enregistrée</span>'}
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Armes & Skins contenus (${rawItems.length}) - <span class="text-yellow-400">Cliquez pour prévisualiser</span> :</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+                  ${rawItems.map(it => {
+                    const itemObj = typeof it === 'string' ? { name: it } : it;
+                    const itemName = itemObj.name || 'Objet';
+                    const itemIcon = itemObj.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png';
+                    const itemRarity = itemObj.rarity || 'Exotic';
+
+                    return `
+                      <div class="flex items-center space-x-2.5 bg-slate-950/90 border border-slate-800 hover:border-yellow-500/60 p-2 rounded-xl cursor-pointer transition shadow-sm group" onclick="openItemModalByObject('${escapeHtml(itemName)}', '${escapeHtml(itemIcon)}', '${itemRarity}')">
+                        <img src="${itemIcon}" class="w-8 h-8 rounded-lg border border-slate-700 object-cover flex-shrink-0 group-hover:border-yellow-400 transition">
+                        <div class="overflow-hidden">
+                          <p class="text-xs font-semibold text-slate-200 truncate group-hover:text-yellow-300 transition">${escapeHtml(itemName)}</p>
+                          <span class="text-[10px] text-slate-500 uppercase">${itemObj.type || 'Skin'}</span>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
                 </div>
               </div>
             </div>
@@ -550,6 +613,54 @@
         }).join('')}
       </ul>`;
     }
+
+    // --- POPUP MODAL (MARCHAND STYLE PREVIEW) ---
+    function openItemModalByObject(name, icon, rarity) {
+      document.getElementById('modalTitle').innerText = name;
+      document.getElementById('modalIcon').src = icon;
+      document.getElementById('modalType').innerText = 'Arme / Skin';
+      document.getElementById('modalRarityBadge').innerText = rarity || 'Exotique';
+      document.getElementById('modalRarityBadge').className = `text-xs uppercase font-bold px-2.5 py-0.5 rounded-md badge-${rarity || 'Exotic'}`;
+      document.getElementById('modalDescription').innerText = `Cliquez ou double-cliquez pour prévisualiser cet équipement et débloquer l'apparence dans votre garde-robe Guild Wars 2.`;
+
+      const skinMatch = (dbData.skins || []).find(s => s.name && s.name.toLowerCase() === name.toLowerCase());
+      if (skinMatch) {
+        document.getElementById('modalItemId').innerText = `ID Skin : #${skinMatch.id}`;
+        document.getElementById('modalSkinContent').innerHTML = `
+          <div class="flex items-center space-x-3">
+            <img src="${skinMatch.icon}" class="w-10 h-10 rounded-lg border border-slate-700">
+            <div>
+              <p class="font-bold text-sm text-yellow-300">${escapeHtml(skinMatch.name)}</p>
+              <p class="text-[11px] text-slate-400">Type : ${skinMatch.type} • Rareté : ${skinMatch.rarity}</p>
+            </div>
+          </div>
+        `;
+      } else {
+        document.getElementById('modalItemId').innerText = `Équipement spécial GW2`;
+        document.getElementById('modalSkinContent').innerHTML = `<p class="text-slate-400 italic text-xs">Skin directement lié à l'objet.</p>`;
+      }
+
+      document.getElementById('itemModal').classList.remove('hidden');
+    }
+
+    function openSkinModal(skinId) {
+      const skin = (dbData.skins || []).find(s => s.id === skinId);
+      if (!skin) return;
+
+      openItemModalByObject(skin.name, skin.icon, skin.rarity);
+    }
+
+    function openItemModalByName(name) {
+      openItemModalByObject(name, 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png', 'Exotic');
+    }
+
+    function closeModal() {
+      document.getElementById('itemModal').classList.add('hidden');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
 
     function escapeHtml(str) {
       if (!str) return '';

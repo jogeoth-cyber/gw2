@@ -140,9 +140,20 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
             if cid and cid not in seen_ids:
                 seen_ids.add(cid)
                 citem = c.get("item") if isinstance(c.get("item"), dict) else {}
-                output_name = skin_info.get("name", "")
+                output_obj = {
+                    "id": ci.get("output_item_id") or skin_info.get("id"),
+                    "name": skin_info.get("name", ""),
+                    "icon": skin_info.get("icon", ""),
+                    "rarity": skin_info.get("rarity", "Exotic"),
+                    "type": skin_info.get("type", ""),
+                    "skin_id": sid
+                }
                 if ci.get("output_item") and isinstance(ci["output_item"], dict):
-                    output_name = ci["output_item"].get("name", output_name)
+                    out = ci["output_item"]
+                    output_obj["name"] = out.get("name", output_obj["name"])
+                    output_obj["icon"] = out.get("icon", output_obj["icon"])
+                    output_obj["rarity"] = out.get("rarity", output_obj["rarity"])
+                    output_obj["default_skin"] = out.get("default_skin")
 
                 containers.append({
                     "id": cid,
@@ -150,18 +161,26 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
                     "icon": citem.get("icon") or c.get("icon", ""),
                     "isTpItem": citem.get("isTpItem", False),
                     "description": citem.get("description", ""),
-                    "output_item_name": output_name,
-                    "skin_id": sid,
-                    "skin_name": skin_info.get("name", ""),
-                    "skin_icon": skin_info.get("icon", "")
+                    "output_item": output_obj
                 })
 
         # 2. Vendoritem with container/chest ingredients
         vitem = m.get("vendoritem")
         if isinstance(vitem, dict):
-            output_name = skin_info.get("name", "")
+            output_obj = {
+                "id": vitem.get("output_item_id") or skin_info.get("id"),
+                "name": skin_info.get("name", ""),
+                "icon": skin_info.get("icon", ""),
+                "rarity": skin_info.get("rarity", "Exotic"),
+                "type": skin_info.get("type", ""),
+                "skin_id": sid
+            }
             if vitem.get("output_item") and isinstance(vitem["output_item"], dict):
-                output_name = vitem["output_item"].get("name", output_name)
+                out = vitem["output_item"]
+                output_obj["name"] = out.get("name", output_obj["name"])
+                output_obj["icon"] = out.get("icon", output_obj["icon"])
+                output_obj["rarity"] = out.get("rarity", output_obj["rarity"])
+                output_obj["default_skin"] = out.get("default_skin")
 
             for ing_item in (vitem.get("ingredient_items") or []):
                 if not isinstance(ing_item, dict):
@@ -178,10 +197,7 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
                             "icon": ing_item.get("icon", ""),
                             "isTpItem": ing_item.get("isTpItem", False),
                             "description": ing_item.get("description", ""),
-                            "output_item_name": output_name,
-                            "skin_id": sid,
-                            "skin_name": skin_info.get("name", ""),
-                            "skin_icon": skin_info.get("icon", "")
+                            "output_item": output_obj
                         })
 
         # 3. Item that itself comes from a container/box
@@ -192,16 +208,22 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
             if cid and cid not in seen_ids:
                 seen_ids.add(cid)
                 citem = c.get("item") if isinstance(c.get("item"), dict) else {}
+                output_obj = {
+                    "id": item_obj.get("id"),
+                    "name": item_obj.get("name", skin_info.get("name", "")),
+                    "icon": item_obj.get("icon", skin_info.get("icon", "")),
+                    "rarity": item_obj.get("rarity", "Exotic"),
+                    "type": item_obj.get("type", ""),
+                    "skin_id": sid,
+                    "default_skin": item_obj.get("default_skin")
+                }
                 containers.append({
                     "id": cid,
                     "name": citem.get("name") or c.get("name", "Caisse / Boîte"),
                     "icon": citem.get("icon") or c.get("icon", ""),
                     "isTpItem": citem.get("isTpItem", False),
                     "description": citem.get("description", ""),
-                    "output_item_name": item_obj.get("name", skin_info.get("name", "")),
-                    "skin_id": sid,
-                    "skin_name": skin_info.get("name", ""),
-                    "skin_icon": skin_info.get("icon", "")
+                    "output_item": output_obj
                 })
 
     return containers
@@ -261,7 +283,7 @@ def main():
     # PART 2: CONTAINERS / CHESTS / CAISSES EXTRACTION
     # -------------------------------------------------------------
     print("\n[2/3] Indexation des caisses, boites et coffres d'apparences...")
-    container_map = {}  # cid -> { id, name, icon, isTpItem, items: [], skins: [] }
+    container_map = {}  # cid -> { id, name, icon, isTpItem, items: [] }
 
     for sid, sdata in skin_results.items():
         sinfo = sdata.get("skin") or {}
@@ -270,7 +292,7 @@ def main():
         skin_containers = extract_containers_and_outputs(acq_methods, sinfo, sid)
         sdata["containers"] = skin_containers
 
-        # Map container -> list of output items/skins
+        # Map container -> list of output item objects
         for c in skin_containers:
             cid = c["id"]
             if cid not in container_map:
@@ -280,27 +302,19 @@ def main():
                     "icon": c["icon"],
                     "isTpItem": c["isTpItem"],
                     "description": c.get("description", ""),
-                    "items": [],
-                    "skins": []
+                    "items": []
                 }
 
-            output_name = c.get("output_item_name") or sinfo.get("name", "")
-            if output_name and output_name not in container_map[cid]["items"]:
-                container_map[cid]["items"].append(output_name)
-
-            container_map[cid]["skins"].append({
-                "id": sid,
-                "name": sinfo.get("name", ""),
-                "output_name": output_name,
-                "type": sinfo.get("type", ""),
-                "rarity": sinfo.get("rarity", ""),
-                "icon": sinfo.get("icon", "")
-            })
+            out_obj = c.get("output_item")
+            if out_obj and isinstance(out_obj, dict):
+                # Avoid duplicate items inside container
+                if not any(it.get("name") == out_obj.get("name") for it in container_map[cid]["items"]):
+                    container_map[cid]["items"].append(out_obj)
 
     # Optional: fetch details for known major containers (e.g. Boîte d'outils récupérés 106159) if present
     container_ids_to_check = [106159]
     for cid in container_ids_to_check:
-        if cid not in container_map:
+        if cid not in container_map or len(container_map[cid]["items"]) <= 1:
             cdata = fetch_item_details(cid, args.lang)
             if cdata and cdata.get("item"):
                 item_info = cdata["item"]
@@ -308,7 +322,15 @@ def main():
                 for u in (cdata.get("usedIn") or []):
                     vitem = u.get("vendoritem")
                     if vitem and vitem.get("output_item"):
-                        outputs.append(vitem["output_item"].get("name"))
+                        out = vitem["output_item"]
+                        outputs.append({
+                            "id": out.get("id"),
+                            "name": out.get("name"),
+                            "icon": out.get("icon"),
+                            "rarity": out.get("rarity", "Exotic"),
+                            "type": out.get("type", ""),
+                            "default_skin": out.get("default_skin")
+                        })
 
                 container_map[cid] = {
                     "id": cid,
@@ -316,8 +338,7 @@ def main():
                     "icon": item_info.get("icon", ""),
                     "isTpItem": item_info.get("isTpItem", False),
                     "description": item_info.get("description", ""),
-                    "items": outputs,
-                    "skins": []
+                    "items": outputs
                 }
 
     container_list = list(container_map.values())
@@ -458,7 +479,7 @@ def main():
             c["name"],
             c["icon"],
             1 if c["isTpItem"] else 0,
-            json.dumps(c.get("items") or c.get("skins") or [], ensure_ascii=False),
+            json.dumps(c.get("items") or [], ensure_ascii=False),
             json.dumps(c, ensure_ascii=False)
         ))
 
