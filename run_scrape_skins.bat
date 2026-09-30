@@ -20,13 +20,11 @@ if %errorlevel% neq 0 (
 )
 
 echo Starting modular extraction across all categories...
-echo.
-
 python scrape_all.py --workers 20 --lang fr
 
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] An error occurred while executing scrape_all.py.
+    echo [ERROR] An error occurred during extraction.
     popd
     pause
     exit /b %errorlevel%

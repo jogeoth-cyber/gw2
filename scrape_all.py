@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Script Principal d'Orchestration:
-Effectue d'abord une pré-détection rapide du nombre total d'éléments disponibles,
+Effectue d'abord une pré-détection rapide du nombre total d'éléments disponibles (skins, caisses, légendaires),
 affiche un résumé clair, puis lance l'extraction modulaire:
 - Module 1: scrape_skins.py (Skins & détails)
 - Module 2: scrape_containers.py (Caisses, coffres, boîtes d'apparences)
@@ -22,7 +22,7 @@ import urllib.request
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from scrape_skins import run_scrape_skins
-from scrape_containers import run_scrape_containers
+from scrape_containers import run_scrape_containers, KNOWN_CONTAINER_IDS
 from scrape_legendaries import run_scrape_legendaries
 from scrape_unlocks_tree import run_scrape_unlocks_tree
 
@@ -45,13 +45,17 @@ def pre_detection_scan(lang="fr"):
 
     counts = {
         "skins": 0,
+        "containers_estimate": 0,
         "legendaries": 0,
         "mystic_recipes": 0
     }
 
     try:
         skins_summary = fetch_json(f"{BASE_URL}/skins/all?lang={lang}")
-        counts["skins"] = len(skins_summary) if isinstance(skins_summary, list) else 0
+        if isinstance(skins_summary, list):
+            counts["skins"] = len(skins_summary)
+            # Estimate known containers + skin container references
+            counts["containers_estimate"] = len(KNOWN_CONTAINER_IDS) + (len(skins_summary) // 15)
     except Exception as e:
         print(f"[Avertissement] Pré-détection skins : {e}")
 
@@ -69,10 +73,11 @@ def pre_detection_scan(lang="fr"):
 
     print("📊 --------------------------------------------------------------")
     print(f"   • Skins détectés dans la garde-robe    : {counts['skins']} skins")
+    print(f"   • Caisses, boîtes et coffres détectés  : ~{counts['containers_estimate']} caisses & coffres")
     print(f"   • Armurerie Légendaire détectée         : {counts['legendaries']} objets légendaires")
     print(f"   • Recettes de la Forge Mystique          : {counts['mystic_recipes']} recettes")
     print("--------------------------------------------------------------")
-    print("✅ Pré-détection terminée. Lancement de l'extraction complète...\n")
+    print("✅ Pré-détection terminée. Lancement de l'extraction modulaire...\n")
     return counts
 
 def init_sqlite_db(db_path):
