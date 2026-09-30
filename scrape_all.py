@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Script Principal d'Orchestration:
-Exécute de manière modulaire les 4 scripts d'extraction:
+Effectue d'abord une pré-détection rapide du nombre total d'éléments disponibles,
+affiche un résumé clair, puis lance l'extraction modulaire:
 - Module 1: scrape_skins.py (Skins & détails)
 - Module 2: scrape_containers.py (Caisses, coffres, boîtes d'apparences)
 - Module 3: scrape_legendaries.py (Armurerie Légendaire & recettes de craft)
@@ -16,6 +17,7 @@ import sys
 import json
 import sqlite3
 import argparse
+import urllib.request
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,6 +30,50 @@ DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
 DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
 DEFAULT_JS_PATH = "gw2_skins_unlocks.js"
 DEFAULT_WORKERS = 20
+BASE_URL = "https://gw2.app/api/v1"
+
+def fetch_json(url, timeout=10):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def pre_detection_scan(lang="fr"):
+    print("\n🔍 ==============================================================")
+    print("   PHASE DE PRÉ-DÉTECTION DES ÉLÉMENTS (GW2.app API)")
+    print("==============================================================")
+    print("Analyse rapide des bases de données distantes en cours...\n")
+
+    counts = {
+        "skins": 0,
+        "legendaries": 0,
+        "mystic_recipes": 0
+    }
+
+    try:
+        skins_summary = fetch_json(f"{BASE_URL}/skins/all?lang={lang}")
+        counts["skins"] = len(skins_summary) if isinstance(skins_summary, list) else 0
+    except Exception as e:
+        print(f"[Avertissement] Pré-détection skins : {e}")
+
+    try:
+        leg_summary = fetch_json(f"{BASE_URL}/legendary-armory/all?lang={lang}")
+        counts["legendaries"] = len(leg_summary) if isinstance(leg_summary, list) else 0
+    except Exception as e:
+        print(f"[Avertissement] Pré-détection armurerie légendaire : {e}")
+
+    try:
+        mystic_summary = fetch_json(f"{BASE_URL}/mystic-recipes/all?lang={lang}")
+        counts["mystic_recipes"] = len(mystic_summary) if isinstance(mystic_summary, list) else 0
+    except Exception as e:
+        print(f"[Avertissement] Pré-détection recettes mystiques : {e}")
+
+    print("📊 --------------------------------------------------------------")
+    print(f"   • Skins détectés dans la garde-robe    : {counts['skins']} skins")
+    print(f"   • Armurerie Légendaire détectée         : {counts['legendaries']} objets légendaires")
+    print(f"   • Recettes de la Forge Mystique          : {counts['mystic_recipes']} recettes")
+    print("--------------------------------------------------------------")
+    print("✅ Pré-détection terminée. Lancement de l'extraction complète...\n")
+    return counts
 
 def init_sqlite_db(db_path):
     conn = sqlite3.connect(db_path)
@@ -96,8 +142,11 @@ def main():
     parser.add_argument("--lang", type=str, default="fr", help="Langue (fr, en, de, es)")
     args = parser.parse_args()
 
+    # Step 0: Pre-Detection Scan
+    pre_detection_scan(lang=args.lang)
+
     print("==============================================================")
-    print(f"   GW2 Scraper Modulaire ({args.lang})")
+    print(f"   GW2 Scraper Modulaire - Lancement ({args.lang})")
     print("==============================================================")
 
     # Step 1: Module Skins
