@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Module 2: Extraction et indexation automatique des caisses, boîtes, coffres d'apparences,
-incluant la catégorie Wiki 'Category:Container_gizmos' et tous les conteneurs du jeu.
+Module 2: Extraction, classification et indexation automatique des caisses, boîtes,
+coffres d'apparences avec filtres de catégories (Choice chests, Stat-selectable, Map currency, Gizmos, Black Lion)
+et types de récompenses (Armes, Armures, Bijoux, Élevé, Légendaire).
 """
 
 import urllib.request
@@ -12,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_URL = "https://gw2.app/api/v1"
 GW2_API_URL = "https://api.guildwars2.com/v2"
 
-# Known major container IDs to always prioritize
+# Known major container IDs
 KNOWN_CONTAINER_IDS = [
     106732,  # Boîte de résine chromatique
     106159,  # Boîte d'outils récupérés
@@ -34,10 +35,43 @@ def fetch_item_details(item_id, lang="fr"):
     except Exception:
         return None
 
+def categorize_container(name, ctype, items):
+    n_low = (name or "").lower()
+
+    # 1. Container Category
+    category = "Choice chests"
+    if ctype == "Gizmo" or any(k in n_low for k in ["gizmo", "outils", "boîte de résine", "résine"]):
+        category = "Container gizmos"
+    elif any(k in n_low for k in ["lion noir", "black lion", "billet", "statuette"]):
+        category = "Black Lion Chest rewards"
+    elif any(k in n_low for k in ["monnaie", "currency", "maguuma", "contrée", "carte"]):
+        category = "Map currency containers"
+    elif any(k in n_low for k in ["statistique", "stats", "choix de stats", "préfixe", "berserker"]):
+        category = "Stat-selectable equipment"
+
+    # 2. Reward Type
+    reward_type = "Stat-selectable weapons"
+    if any(k in n_low for k in ["légendaire", "legendary"]):
+        reward_type = "Legendary chests"
+    elif any(k in n_low for k in ["élevé", "elevé", "ascended"]):
+        reward_type = "Ascended chests"
+    elif any(k in n_low for k in ["armure", "manteau", "bottes", "gants", "casque", "pantalon"]):
+        reward_type = "Stat-selectable armor"
+    elif any(k in n_low for k in ["bijou", "anneau", "amulette", "accessoire", "trinket"]):
+        reward_type = "Stat-selectable trinkets"
+
+    # 3. Semantic Properties
+    has_stat_selection = True if (reward_type in ["Stat-selectable armor", "Stat-selectable weapons", "Stat-selectable trinkets", "Ascended chests"] or "stat" in n_low) else False
+
+    return {
+        "category": category,
+        "reward_type": reward_type,
+        "has_context_choice": True,
+        "is_selectable_type": True,
+        "has_stat_selection": has_stat_selection
+    }
+
 def scan_gw2_container_gizmo_ids(lang="fr"):
-    """
-    Scanne l'API GW2 pour détecter tous les conteneurs et gizmos de type boîtes / caisses / coffres.
-    """
     print("[CAISSES] Détection automatique des conteneurs & gizmos (Category:Container_gizmos & items)...")
     discovered_ids = set(KNOWN_CONTAINER_IDS)
 
@@ -102,7 +136,8 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
                     "icon": citem.get("icon") or c.get("icon", ""),
                     "isTpItem": citem.get("isTpItem", False),
                     "description": citem.get("description", ""),
-                    "output_item": output_obj
+                    "output_item": output_obj,
+                    "type": citem.get("type", "Container")
                 })
 
         vitem = m.get("vendoritem")
@@ -137,7 +172,8 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
                             "icon": ing_item.get("icon", ""),
                             "isTpItem": ing_item.get("isTpItem", False),
                             "description": ing_item.get("description", ""),
-                            "output_item": output_obj
+                            "output_item": output_obj,
+                            "type": itype
                         })
 
     return containers
@@ -161,6 +197,7 @@ def run_scrape_containers(skin_results, lang="fr"):
                     "id": cid,
                     "name": c["name"],
                     "icon": c["icon"],
+                    "type": c.get("type", "Container"),
                     "isTpItem": c["isTpItem"],
                     "description": c.get("description", ""),
                     "items": []
@@ -171,7 +208,7 @@ def run_scrape_containers(skin_results, lang="fr"):
                 if not any(it.get("name") == out_obj.get("name") for it in container_map[cid]["items"]):
                     container_map[cid]["items"].append(out_obj)
 
-    # 2. Discover and fetch Container/Gizmo choice items (including Category:Container_gizmos)
+    # 2. Discover and fetch Container/Gizmo choice items
     discovered_ids = scan_gw2_container_gizmo_ids(lang=lang)
     missing_ids = [cid for cid in discovered_ids if cid not in container_map or len(container_map[cid]["items"]) == 0]
 
@@ -186,6 +223,7 @@ def run_scrape_containers(skin_results, lang="fr"):
                 item_info = cdata["item"]
                 cname = item_info.get("name", "")
                 cicon = item_info.get("icon", "")
+                ctype = item_info.get("type", "Container")
                 is_tp = item_info.get("isTpItem", False)
 
                 if cid not in container_map:
@@ -193,12 +231,12 @@ def run_scrape_containers(skin_results, lang="fr"):
                         "id": cid,
                         "name": cname,
                         "icon": cicon,
+                        "type": ctype,
                         "isTpItem": is_tp,
                         "description": item_info.get("description", ""),
                         "items": []
                     }
 
-                # Extract output items from usedIn vendoritem / containeritem
                 for u in (cdata.get("usedIn") or []):
                     if not isinstance(u, dict):
                         continue
@@ -216,7 +254,13 @@ def run_scrape_containers(skin_results, lang="fr"):
                         if not any(it.get("name") == out_obj["name"] for it in container_map[cid]["items"]):
                             container_map[cid]["items"].append(out_obj)
 
-    # Clean up empty containers
-    container_list = [c for c in container_map.values() if len(c.get("items", [])) > 0 or c["id"] in KNOWN_CONTAINER_IDS]
+    # 3. Add classification tags
+    container_list = []
+    for cid, c in container_map.items():
+        if len(c.get("items", [])) > 0 or cid in KNOWN_CONTAINER_IDS:
+            tags = categorize_container(c["name"], c.get("type"), c.get("items"))
+            c.update(tags)
+            container_list.append(c)
+
     print(f"[CAISSES] Terminé: {len(container_list)} caisses/coffres d'apparences valides indexés.")
     return container_list

@@ -155,23 +155,62 @@
     <!-- TAB 2: CONTAINERS / CHESTS / CAISSES -->
     <section id="secContainers" class="hidden space-y-6">
       <!-- Search & Filters -->
-      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
-        <div class="flex-grow min-w-[260px]">
-          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche de Caisse / Boîte / Coffre ou Skin contenu</label>
-          <input type="text" id="containerSearch" oninput="filterContainers()" placeholder="Ex: Boîte d'outils, Choix, Amoureux, Constructeur véloce..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md space-y-4">
+        <div class="flex flex-wrap gap-4 items-center">
+          <div class="flex-grow min-w-[260px]">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Recherche de Caisse / Boîte / Coffre ou Skin contenu</label>
+            <input type="text" id="containerSearch" oninput="filterContainers()" placeholder="Ex: Boîte d'outils, Résine chromatique, Hero's Choice, Stat-selectable..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+          </div>
+
+          <div class="w-56">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Disponibilité Comptoir</label>
+            <select id="containerTpFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les caisses</option>
+              <option value="tp">Achetable au comptoir (TP)</option>
+              <option value="account">Lié au compte / Spécial</option>
+            </select>
+          </div>
         </div>
 
-        <div class="w-56">
-          <label class="block text-xs font-medium text-slate-400 mb-1">Disponibilité Comptoir</label>
-          <select id="containerTpFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
-            <option value="">Toutes les caisses</option>
-            <option value="tp">Achetable au comptoir (TP)</option>
-            <option value="account">Lié au compte / Spécial</option>
-          </select>
+        <!-- Wiki & Cargo Filters Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-800">
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">1. Catégories de Conteneurs à Choix</label>
+            <select id="containerCategoryFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les catégories</option>
+              <option value="Choice chests">Category:Choice chests</option>
+              <option value="Stat-selectable equipment">Category:Stat-selectable equipment containers</option>
+              <option value="Map currency containers">Category:Map currency containers</option>
+              <option value="Container gizmos">Category:Container gizmos</option>
+              <option value="Black Lion Chest rewards">Category:Black Lion Chest rewards</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">2. Type de Récompense à Sélectionner</label>
+            <select id="containerRewardTypeFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Tous les types de récompenses</option>
+              <option value="Stat-selectable armor">Stat-selectable armor</option>
+              <option value="Stat-selectable weapons">Stat-selectable weapons</option>
+              <option value="Stat-selectable trinkets">Stat-selectable trinkets</option>
+              <option value="Ascended chests">Ascended chests</option>
+              <option value="Legendary chests">Legendary chests</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">3. Recherche Sémanique Wiki Cargo</label>
+            <select id="containerSemanticFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les propriétés</option>
+              <option value="choice">Has context = Choice</option>
+              <option value="selectable">Is container type = Selectable</option>
+              <option value="stat_selection">Has stat selection = True</option>
+            </select>
+          </div>
         </div>
 
-        <div class="flex items-end pb-0.5">
-          <span id="containersMatchingCount" class="text-xs text-amber-300 font-medium bg-amber-950/40 px-3 py-2.5 rounded-xl border border-amber-800/50">
+        <div class="flex justify-between items-center text-xs pt-1">
+          <span id="containersMatchingCount" class="text-amber-300 font-medium bg-amber-950/40 px-3 py-1.5 rounded-xl border border-amber-800/50">
             0 caisse(s) affichée(s)
           </span>
         </div>
@@ -488,10 +527,20 @@
     function filterContainers() {
       const query = document.getElementById('containerSearch').value.toLowerCase().trim();
       const tpFilter = document.getElementById('containerTpFilter').value;
+      const catFilter = document.getElementById('containerCategoryFilter').value;
+      const rewardFilter = document.getElementById('containerRewardTypeFilter').value;
+      const semanticFilter = document.getElementById('containerSemanticFilter').value;
 
       const filtered = (dbData.containers || []).filter(c => {
         if (tpFilter === 'tp' && !c.isTpItem) return false;
         if (tpFilter === 'account' && c.isTpItem) return false;
+
+        if (catFilter && c.category !== catFilter) return false;
+        if (rewardFilter && c.reward_type !== rewardFilter) return false;
+
+        if (semanticFilter === 'choice' && !c.has_context_choice) return false;
+        if (semanticFilter === 'selectable' && !c.is_selectable_type) return false;
+        if (semanticFilter === 'stat_selection' && !c.has_stat_selection) return false;
 
         if (query) {
           const matchName = c.name && c.name.toLowerCase().includes(query);
@@ -523,11 +572,13 @@
                 <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-700/50 object-cover flex-shrink-0 shadow" alt="">
                 <div>
                   <h3 class="font-bold text-base text-amber-300 tracking-wide">${escapeHtml(c.name)}</h3>
-                  <div class="flex items-center space-x-2 mt-1">
+                  <div class="flex flex-wrap items-center gap-1.5 mt-1">
                     ${c.isTpItem ?
                       `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-green-950 text-green-300 border border-green-800">🛒 Achetable au comptoir (TP)</span>` :
                       `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">🔒 Lié au compte / Spécial</span>`
                     }
+                    ${c.category ? `<span class="text-[10px] bg-amber-950/80 text-amber-200 px-2 py-0.5 rounded-md border border-amber-800/60 font-semibold">${escapeHtml(c.category)}</span>` : ''}
+                    ${c.reward_type ? `<span class="text-[10px] bg-blue-950/80 text-blue-200 px-2 py-0.5 rounded-md border border-blue-800/60 font-semibold">${escapeHtml(c.reward_type)}</span>` : ''}
                   </div>
                 </div>
               </div>
@@ -558,6 +609,7 @@
 
             <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
               <span>Item ID : #${c.id}</span>
+              ${c.has_stat_selection ? `<span class="text-amber-400 font-medium">Has stat selection = True</span>` : ''}
             </div>
           </div>
         `;
