@@ -6,8 +6,19 @@ Module 2: Extraction et indexation des caisses, boîtes, coffres d'apparences et
 
 import urllib.request
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://gw2.app/api/v1"
+
+# Major container / gizmo / choice box IDs in Guild Wars 2
+KNOWN_CONTAINER_IDS = [
+    106732,  # Boîte de résine chromatique
+    106159,  # Boîte d'outils récupérés
+    105104,  # Boîte de choix d'apparence d'arme en résine chromatique
+    97889,   # Boîte de choix légendaire
+    108987,  # Resine scintillante
+    109782   # Cache d'armes en résine scintillante
+]
 
 def fetch_json(url, timeout=12):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -98,9 +109,10 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
     return containers
 
 def run_scrape_containers(skin_results, lang="fr"):
-    print("[CAISSES] Indexation des caisses/boîtes/coffres à partir des skins...")
+    print("[CAISSES] Indexation des caisses/boîtes/coffres d'apparences...")
     container_map = {}
 
+    # 1. Extract containers linked from skins
     for sid, sdata in skin_results.items():
         sinfo = sdata.get("skin") or {}
         acq_methods = sdata.get("acquisitionMethods") or []
@@ -125,35 +137,46 @@ def run_scrape_containers(skin_results, lang="fr"):
                 if not any(it.get("name") == out_obj.get("name") for it in container_map[cid]["items"]):
                     container_map[cid]["items"].append(out_obj)
 
-    # Check known major containers
-    container_ids_to_check = [106159]
-    for cid in container_ids_to_check:
-        if cid not in container_map or len(container_map[cid]["items"]) <= 1:
-            cdata = fetch_item_details(cid, lang)
+    # 2. Check and fetch known major container/gizmo IDs
+    print(f"[CAISSES] Analyse des conteneurs/boîtes connus ({len(KNOWN_CONTAINER_IDS)} ID(s))...")
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_cid = {executor.submit(fetch_item_details, cid, lang): cid for cid in KNOWN_CONTAINER_IDS}
+        for future in as_completed(future_to_cid):
+            cid = future_to_cid[future]
+            cdata = future.result()
             if cdata and cdata.get("item"):
                 item_info = cdata["item"]
-                outputs = []
+                cname = item_info.get("name", "")
+                cicon = item_info.get("icon", "")
+                is_tp = item_info.get("isTpItem", False)
+
+                if cid not in container_map:
+                    container_map[cid] = {
+                        "id": cid,
+                        "name": cname,
+                        "icon": cicon,
+                        "isTpItem": is_tp,
+                        "description": item_info.get("description", ""),
+                        "items": []
+                    }
+
+                # Extract output items from usedIn vendoritem / containeritem
                 for u in (cdata.get("usedIn") or []):
+                    if not isinstance(u, dict):
+                        continue
                     vitem = u.get("vendoritem")
-                    if vitem and vitem.get("output_item"):
+                    if isinstance(vitem, dict) and vitem.get("output_item"):
                         out = vitem["output_item"]
-                        outputs.append({
+                        out_obj = {
                             "id": out.get("id"),
                             "name": out.get("name"),
                             "icon": out.get("icon"),
                             "rarity": out.get("rarity", "Exotic"),
                             "type": out.get("type", ""),
                             "default_skin": out.get("default_skin")
-                        })
-
-                container_map[cid] = {
-                    "id": cid,
-                    "name": item_info.get("name", ""),
-                    "icon": item_info.get("icon", ""),
-                    "isTpItem": item_info.get("isTpItem", False),
-                    "description": item_info.get("description", ""),
-                    "items": outputs
-                }
+                        }
+                        if not any(it.get("name") == out_obj["name"] for it in container_map[cid]["items"]):
+                            container_map[cid]["items"].append(out_obj)
 
     container_list = list(container_map.values())
     print(f"[CAISSES] Terminé: {len(container_list)} caisses/coffres indexés.")
