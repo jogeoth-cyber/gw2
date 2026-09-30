@@ -4,14 +4,22 @@
 Module 2: Extraction, classification et indexation automatique des caisses, boîtes,
 coffres d'apparences avec filtres de catégories (Choice chests, Stat-selectable, Map currency, Gizmos, Black Lion)
 et types de récompenses (Armes, Armures, Bijoux, Élevé, Légendaire).
+
+Peut être exécuté de manière totalement autonome (`python scrape_containers.py`).
 """
 
+import os
+import sqlite3
 import urllib.request
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://gw2.app/api/v1"
 GW2_API_URL = "https://api.guildwars2.com/v2"
+
+DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
+DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
+DEFAULT_JS_PATH = "gw2_skins_unlocks.js"
 
 # Known major container IDs
 KNOWN_CONTAINER_IDS = [
@@ -178,9 +186,10 @@ def extract_containers_and_outputs(acq_methods, skin_info, sid):
 
     return containers
 
-def run_scrape_containers(skin_results, lang="fr"):
+def run_scrape_containers(skin_results=None, lang="fr"):
     print("[CAISSES] Indexation des caisses/boîtes/coffres d'apparences...")
     container_map = {}
+    skin_results = skin_results or {}
 
     # 1. Extract containers linked from skins
     for sid, sdata in skin_results.items():
@@ -264,3 +273,59 @@ def run_scrape_containers(skin_results, lang="fr"):
 
     print(f"[CAISSES] Terminé: {len(container_list)} caisses/coffres d'apparences valides indexés.")
     return container_list
+
+def save_standalone(container_list):
+    """Enregistre les caisses de manière autonome dans JSON, JS et SQLite."""
+    existing_data = {"skins": [], "containers": [], "legendaries": [], "unlocks_tree": [], "dyes": []}
+    if os.path.exists(DEFAULT_JSON_PATH):
+        try:
+            with open(DEFAULT_JSON_PATH, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        except Exception:
+            pass
+
+    existing_data["containers"] = container_list
+
+    print(f"[CAISSES] Enregistrement autonome dans {DEFAULT_JSON_PATH} et {DEFAULT_JS_PATH}...")
+    with open(DEFAULT_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+    with open(DEFAULT_JS_PATH, "w", encoding="utf-8") as f:
+        f.write("window.GW2_SKINS_DB = ")
+        json.dump(existing_data, f, ensure_ascii=False)
+        f.write(";")
+
+    if os.path.exists(DEFAULT_DB_PATH):
+        try:
+            conn = sqlite3.connect(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS containers (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT,
+                    icon TEXT,
+                    is_tp_item INTEGER,
+                    contained_skins_json TEXT,
+                    full_data_json TEXT
+                )
+            """)
+            cursor.execute("DELETE FROM containers")
+            container_db_rows = [(
+                c["id"], c["name"], c["icon"], 1 if c["isTpItem"] else 0,
+                json.dumps(c.get("items") or [], ensure_ascii=False),
+                json.dumps(c, ensure_ascii=False)
+            ) for c in container_list]
+            cursor.executemany("""
+                INSERT INTO containers (id, name, icon, is_tp_item, contained_skins_json, full_data_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, container_db_rows)
+            conn.commit()
+            conn.close()
+            print(f"[CAISSES] Lignes mises à jour dans SQLite ({len(container_db_rows)}).")
+        except Exception as e:
+            print(f"[CAISSES] Erreur SQLite: {e}")
+
+if __name__ == "__main__":
+    clist = run_scrape_containers()
+    save_standalone(clist)
+    print("Extraction autonome des caisses terminée.")

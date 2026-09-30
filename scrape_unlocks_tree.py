@@ -4,9 +4,17 @@
 Module 4: Extraction et construction de l'arborescence multi-niveaux indéfinie
 (Enfant -> Parent -> Grand-Parent -> Racine).
 Trace tous les niveaux de parents jusqu'au sommet (succès, collections, coffres, marchand).
+
+Peut être exécuté de manière totalement autonome (`python scrape_unlocks_tree.py`).
 """
 
+import os
+import sqlite3
 import json
+
+DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
+DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
+DEFAULT_JS_PATH = "gw2_skins_unlocks.js"
 
 def get_ancestor_chain(child_name, child_to_parents, visited=None):
     if visited is None:
@@ -36,8 +44,26 @@ def get_ancestor_chain(child_name, child_to_parents, visited=None):
 
     return chain
 
-def run_scrape_unlocks_tree(skin_results, container_list, leg_results):
+def run_scrape_unlocks_tree(skin_results=None, container_list=None, leg_results=None):
     print("[HIÉRARCHIE] Construction de la carte multi-niveaux d'ascendance indéfinie...")
+
+    skin_results = skin_results or {}
+    container_list = container_list or []
+    leg_results = leg_results or []
+
+    # If data is empty, attempt to load from existing json
+    if not skin_results and not container_list and os.path.exists(DEFAULT_JSON_PATH):
+        try:
+            with open(DEFAULT_JSON_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+                container_list = d.get("containers", [])
+                leg_results = d.get("legendaries", [])
+                # re-map skin array
+                for s in d.get("skins", []):
+                    if isinstance(s, dict) and "id" in s:
+                        skin_results[s["id"]] = s.get("raw") or s
+        except Exception:
+            pass
 
     child_to_parents = {}  # child_name -> list of parent dicts
     element_catalog = {}   # element_name -> dict
@@ -157,3 +183,55 @@ def run_scrape_unlocks_tree(skin_results, container_list, leg_results):
 
     print(f"[HIÉRARCHIE] Terminé: {len(multi_level_tree)} éléments avec leurs chaînes de parents multiniveaux indexés.")
     return multi_level_tree
+
+def save_standalone(unlocks_tree_list):
+    """Enregistre l'arbre de déblocages de manière autonome."""
+    existing_data = {"skins": [], "containers": [], "legendaries": [], "unlocks_tree": [], "dyes": []}
+    if os.path.exists(DEFAULT_JSON_PATH):
+        try:
+            with open(DEFAULT_JSON_PATH, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        except Exception:
+            pass
+
+    existing_data["unlocks_tree"] = unlocks_tree_list
+
+    print(f"[HIÉRARCHIE] Enregistrement autonome dans {DEFAULT_JSON_PATH} et {DEFAULT_JS_PATH}...")
+    with open(DEFAULT_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+    with open(DEFAULT_JS_PATH, "w", encoding="utf-8") as f:
+        f.write("window.GW2_SKINS_DB = ")
+        json.dump(existing_data, f, ensure_ascii=False)
+        f.write(";")
+
+    if os.path.exists(DEFAULT_DB_PATH):
+        try:
+            conn = sqlite3.connect(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS unlocks_tree (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    parent_name TEXT,
+                    parent_type TEXT,
+                    children_json TEXT
+                )
+            """)
+            cursor.execute("DELETE FROM unlocks_tree")
+            tree_db_rows = [(
+                t["name"], t["type"], json.dumps(t["children"], ensure_ascii=False)
+            ) for t in unlocks_tree_list]
+            cursor.executemany("""
+                INSERT INTO unlocks_tree (parent_name, parent_type, children_json)
+                VALUES (?, ?, ?)
+            """, tree_db_rows)
+            conn.commit()
+            conn.close()
+            print(f"[HIÉRARCHIE] Lignes mises à jour dans SQLite ({len(tree_db_rows)}).")
+        except Exception as e:
+            print(f"[HIÉRARCHIE] Erreur SQLite: {e}")
+
+if __name__ == "__main__":
+    utree = run_scrape_unlocks_tree()
+    save_standalone(utree)
+    print("Extraction autonome de l'arbre de déblocages terminée.")

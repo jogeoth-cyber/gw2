@@ -2,13 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 Module 3: Extraction de l'Armurerie Légendaire et des recettes de fabrication.
+Peut être exécuté de manière totalement autonome (`python scrape_legendaries.py`).
 """
 
+import os
+import sqlite3
 import urllib.request
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://gw2.app/api/v1"
+DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
+DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
+DEFAULT_JS_PATH = "gw2_skins_unlocks.js"
 
 def fetch_json(url, timeout=12):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -111,3 +117,65 @@ def run_scrape_legendaries(workers=15, lang="fr"):
 
     print(f"[LÉGENDAIRES] Terminé: {len(leg_results)} objets légendaires traités.")
     return leg_results
+
+def save_standalone(leg_results):
+    """Enregistre les objets légendaires de manière autonome."""
+    existing_data = {"skins": [], "containers": [], "legendaries": [], "unlocks_tree": [], "dyes": []}
+    if os.path.exists(DEFAULT_JSON_PATH):
+        try:
+            with open(DEFAULT_JSON_PATH, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        except Exception:
+            pass
+
+    existing_data["legendaries"] = leg_results
+
+    print(f"[LÉGENDAIRES] Enregistrement autonome dans {DEFAULT_JSON_PATH} et {DEFAULT_JS_PATH}...")
+    with open(DEFAULT_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+    with open(DEFAULT_JS_PATH, "w", encoding="utf-8") as f:
+        f.write("window.GW2_SKINS_DB = ")
+        json.dump(existing_data, f, ensure_ascii=False)
+        f.write(";")
+
+    if os.path.exists(DEFAULT_DB_PATH):
+        try:
+            conn = sqlite3.connect(DEFAULT_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS legendaries (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT,
+                    type TEXT,
+                    rarity TEXT,
+                    icon TEXT,
+                    max_count INTEGER,
+                    default_skin_id INTEGER,
+                    craft_tree_json TEXT,
+                    acquisition_methods_json TEXT,
+                    full_data_json TEXT
+                )
+            """)
+            cursor.execute("DELETE FROM legendaries")
+            leg_db_rows = [(
+                leg["id"], leg["name"], leg["type"], leg["rarity"], leg["icon"],
+                leg["max_count"], leg["default_skin_id"],
+                json.dumps(leg["craft_tree"], ensure_ascii=False) if leg["craft_tree"] else None,
+                json.dumps(leg["acquisitionMethods"], ensure_ascii=False),
+                json.dumps(leg["raw"], ensure_ascii=False)
+            ) for leg in leg_results]
+            cursor.executemany("""
+                INSERT INTO legendaries (id, name, type, rarity, icon, max_count, default_skin_id, craft_tree_json, acquisition_methods_json, full_data_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, leg_db_rows)
+            conn.commit()
+            conn.close()
+            print(f"[LÉGENDAIRES] Lignes mises à jour dans SQLite ({len(leg_db_rows)}).")
+        except Exception as e:
+            print(f"[LÉGENDAIRES] Erreur SQLite: {e}")
+
+if __name__ == "__main__":
+    legs = run_scrape_legendaries()
+    save_standalone(legs)
+    print("Extraction autonome des objets légendaires terminée.")
