@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guild Wars 2 - Explorateur de Skins, Caisses, Déblocages & Craft Légendaire</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="gw2_skins_unlocks.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            gwGold: '#e5c158',
+            gwDark: '#121418',
+            gwCard: '#1a1d24',
+            gwCardBorder: '#2a2f3a',
+            gwLegendary: '#a239ea',
+            gwExotic: '#ffa100',
+            gwRare: '#f4d03f',
+            gwMasterwork: '#34d399',
+            gwFine: '#60a5fa',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0f1115; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+    .rarity-Legendary { border-left: 4px solid #a239ea; color: #d8b4fe; }
+    .rarity-Exotic { border-left: 4px solid #ffa100; color: #fde047; }
+    .rarity-Rare { border-left: 4px solid #f4d03f; color: #fef08a; }
+    .rarity-Masterwork { border-left: 4px solid #34d399; color: #a7f3d0; }
+    .rarity-Fine { border-left: 4px solid #60a5fa; color: #bfdbfe; }
+    .rarity-Basic { border-left: 4px solid #94a3b8; color: #cbd5e1; }
+
+    .badge-Legendary { background-color: rgba(162, 57, 234, 0.2); color: #e9d5ff; border: 1px solid #a239ea; }
+    .badge-Exotic { background-color: rgba(255, 161, 0, 0.2); color: #fef08a; border: 1px solid #ffa100; }
+    .badge-Rare { background-color: rgba(244, 208, 63, 0.2); color: #fef9c3; border: 1px solid #f4d03f; }
+    .badge-Masterwork { background-color: rgba(52, 211, 153, 0.2); color: #d1fae5; border: 1px solid #34d399; }
+    .badge-Fine { background-color: rgba(96, 165, 250, 0.2); color: #dbeafe; border: 1px solid #60a5fa; }
+    .badge-Basic { background-color: rgba(148, 163, 184, 0.2); color: #e2e8f0; border: 1px solid #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-gwCard border-b border-gwCardBorder px-6 py-4 shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400 font-bold text-xl">
+          ⚔️
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-yellow-400 tracking-wide">GW2 Skins, Caisses & Craft Légendaire</h1>
+          <p class="text-xs text-slate-400">Base de données d'obtention, coffres d'apparences et recettes de fabrication</p>
+        </div>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <nav class="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 flex-wrap gap-1">
+        <button id="tabBtnSkins" onclick="switchTab('skins')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow">
+          ✨ Skins (<span id="countSkins">0</span>)
+        </button>
+        <button id="tabBtnContainers" onclick="switchTab('containers')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+          📦 Caisses & Coffres (<span id="countContainers">0</span>)
+        </button>
+        <button id="tabBtnUnlocksTree" onclick="switchTab('unlocksTree')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+          🔍 Arbre Parents Multi-Niveaux (<span id="countUnlocksTree">0</span>)
+        </button>
+        <button id="tabBtnLeg" onclick="switchTab('legendaries')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+          🔮 Légendaires (<span id="countLeg">0</span>)
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl w-full mx-auto p-6 flex-grow">
+
+    <!-- Status / Loading Indicator -->
+    <div id="loadingBox" class="bg-slate-800/80 border border-slate-700 rounded-xl p-8 text-center my-12 shadow-xl">
+      <div class="inline-block animate-spin text-3xl text-yellow-400 mb-3">⏳</div>
+      <h2 class="text-lg font-semibold text-slate-200 mb-1">Chargement de la base de données...</h2>
+      <p class="text-sm text-slate-400">Lecture de <code class="text-yellow-300">gw2_skins_unlocks.js</code> / <code class="text-yellow-300">json</code></p>
+    </div>
+
+    <!-- Error Box -->
+    <div id="errorBox" class="hidden bg-red-950/50 border border-red-800 text-red-200 rounded-xl p-6 my-8 text-center max-w-2xl mx-auto shadow-2xl">
+      <p class="font-semibold text-xl mb-2 text-red-400">❌ Base de données introuvable ou bloquée par le navigateur !</p>
+      <p class="text-sm text-slate-300 mb-4 leading-relaxed">
+        Veuillez exécuter <code class="bg-slate-900 px-2 py-1 rounded text-yellow-300 font-mono">run_scrape_skins.bat</code> pour générer la base.
+      </p>
+      <p class="text-xs text-slate-400 mb-6">
+        Note : Si vous ouvrez cette page en double-cliquant dessus (fichier <code class="text-yellow-400">file://</code>), vous pouvez utiliser le bouton ci-dessous pour charger le fichier JSON directement ou lancer <code class="text-yellow-400">run_web_interface.bat</code>.
+      </p>
+
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <label class="cursor-pointer px-5 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-slate-950 font-bold rounded-xl text-sm transition shadow-lg flex items-center space-x-2">
+          <span>📂 Choisir le fichier gw2_skins_unlocks.json</span>
+          <input type="file" id="jsonFileInput" accept=".json" onchange="loadFromFile(event)" class="hidden">
+        </label>
+
+        <button onclick="loadData()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-medium rounded-xl text-sm transition">
+          🔄 Réessayer
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: SKINS & UNLOCKS -->
+    <section id="secSkins" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
+        <div class="flex-grow min-w-[260px]">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche (Nom de skin, mot-clé ou caisse)</label>
+          <input type="text" id="skinSearch" oninput="filterSkins()" placeholder="Ex: Hache, Ténèbres, Boîte d'outils, Outils..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+        </div>
+
+        <div class="w-48">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Type d'équipement</label>
+          <select id="skinType" onchange="filterSkins()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+            <option value="">Tous les types</option>
+            <option value="Armor">Armure</option>
+            <option value="Weapon">Arme</option>
+            <option value="Back">Sac à dos</option>
+            <option value="Gathering">Outil de récolte</option>
+          </select>
+        </div>
+
+        <div class="w-44">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Rareté</label>
+          <select id="skinRarity" onchange="filterSkins()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+            <option value="">Toutes les raretés</option>
+            <option value="Legendary">Légendaire</option>
+            <option value="Exotic">Exotique</option>
+            <option value="Rare">Rare</option>
+            <option value="Masterwork">Chef-d'œuvre</option>
+            <option value="Fine">Raffiné</option>
+            <option value="Basic">Basique</option>
+          </select>
+        </div>
+
+        <div class="flex items-end pb-0.5">
+          <span id="skinsMatchingCount" class="text-xs text-slate-400 font-medium bg-slate-900 px-3 py-2.5 rounded-xl border border-slate-800">
+            0 skins affichés
+          </span>
+        </div>
+      </div>
+
+      <!-- Skins Grid -->
+      <div id="skinsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+    </section>
+
+    <!-- TAB 2: CONTAINERS / CHESTS / CAISSES -->
+    <section id="secContainers" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md space-y-4">
+        <div class="flex flex-wrap gap-4 items-center">
+          <div class="flex-grow min-w-[260px]">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Recherche de Caisse / Boîte / Coffre ou Skin contenu</label>
+            <input type="text" id="containerSearch" oninput="filterContainers()" placeholder="Ex: Boîte d'outils, Résine chromatique, Hero's Choice, Stat-selectable..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+          </div>
+
+          <div class="w-56">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Disponibilité Comptoir</label>
+            <select id="containerTpFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les caisses</option>
+              <option value="tp">Achetable au comptoir (TP)</option>
+              <option value="account">Lié au compte / Spécial</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Wiki & Cargo Filters Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-800">
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">1. Catégories de Conteneurs à Choix</label>
+            <select id="containerCategoryFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les catégories</option>
+              <option value="Choice chests">Category:Choice chests</option>
+              <option value="Stat-selectable equipment">Category:Stat-selectable equipment containers</option>
+              <option value="Map currency containers">Category:Map currency containers</option>
+              <option value="Container gizmos">Category:Container gizmos</option>
+              <option value="Black Lion Chest rewards">Category:Black Lion Chest rewards</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">2. Type de Récompense à Sélectionner</label>
+            <select id="containerRewardTypeFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Tous les types de récompenses</option>
+              <option value="Stat-selectable armor">Stat-selectable armor</option>
+              <option value="Stat-selectable weapons">Stat-selectable weapons</option>
+              <option value="Stat-selectable trinkets">Stat-selectable trinkets</option>
+              <option value="Ascended chests">Ascended chests</option>
+              <option value="Legendary chests">Legendary chests</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-amber-300 mb-1">3. Recherche Sémanique Wiki Cargo</label>
+            <select id="containerSemanticFilter" onchange="filterContainers()" class="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-yellow-500">
+              <option value="">Toutes les propriétés</option>
+              <option value="choice">Has context = Choice</option>
+              <option value="selectable">Is container type = Selectable</option>
+              <option value="stat_selection">Has stat selection = True</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center text-xs pt-1">
+          <span id="containersMatchingCount" class="text-amber-300 font-medium bg-amber-950/40 px-3 py-1.5 rounded-xl border border-amber-800/50">
+            0 caisse(s) affichée(s)
+          </span>
+        </div>
+      </div>
+
+      <!-- Containers Grid -->
+      <div id="containersGrid" class="grid grid-cols-1 gap-6"></div>
+    </section>
+
+    <!-- TAB 3: MULTI-LEVEL UNLOCKS TREE / ARBORESCENCE MULTI-NIVEAUX PARENTS -->
+    <section id="secUnlocksTree" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
+        <div class="flex-grow min-w-[260px]">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche Multi-Niveaux (Élément, Skin, Boîte, Collection, Succès)</label>
+          <input type="text" id="unlocksTreeSearch" oninput="filterUnlocksTree()" placeholder="Tapez un nom d'élément : ex. Arc court, Boîte d'outils, Fast Constructor, Succès..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 text-slate-100 placeholder-slate-500">
+        </div>
+
+        <div class="flex items-end pb-0.5">
+          <span id="unlocksTreeMatchingCount" class="text-xs text-blue-300 font-medium bg-blue-950/40 px-3 py-2.5 rounded-xl border border-blue-800/50">
+            0 élément(s) affiché(s)
+          </span>
+        </div>
+      </div>
+
+      <!-- Unlocks Tree Grid -->
+      <div id="unlocksTreeGrid" class="grid grid-cols-1 gap-6"></div>
+    </section>
+
+    <!-- TAB 4: LEGENDARIES & CRAFTING -->
+    <section id="secLeg" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
+        <div class="flex-grow min-w-[260px]">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche Objet Légendaire</label>
+          <input type="text" id="legSearch" oninput="filterLegendaries()" placeholder="Ex: Givrecroc, Bipolaire, Exorde, Incinérateur..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-yellow-500 text-slate-100 placeholder-slate-500">
+        </div>
+
+        <div class="w-48">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Type d'objet</label>
+          <select id="legType" onchange="filterLegendaries()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-yellow-500">
+            <option value="">Tous les types</option>
+            <option value="Weapon">Armes</option>
+            <option value="Armor">Armures</option>
+            <option value="Trinket">Babioles / Bijoux</option>
+            <option value="Back">Sacs à dos</option>
+            <option value="Relic">Reliques</option>
+          </select>
+        </div>
+
+        <div class="flex items-end pb-0.5">
+          <span id="legMatchingCount" class="text-xs text-purple-300 font-medium bg-purple-950/40 px-3 py-2.5 rounded-xl border border-purple-800/50">
+            0 légendaires affichés
+          </span>
+        </div>
+      </div>
+
+      <!-- Legendaries Grid -->
+      <div id="legGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+    </section>
+
+  </main>
+
+  <!-- MERCHANT STYLE PREVIEW POPUP MODAL -->
+  <div id="itemModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-gwCard border border-amber-600/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative animate-fade-in">
+
+      <!-- Close Button -->
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-900 w-8 h-8 rounded-full border border-slate-700 flex items-center justify-center font-bold transition">
+        ✕
+      </button>
+
+      <!-- Modal Content Header -->
+      <div class="flex items-center space-x-4 mb-4 pb-4 border-b border-slate-800">
+        <img id="modalIcon" src="" class="w-16 h-16 rounded-2xl bg-slate-900 border border-amber-500/50 object-cover shadow-lg" alt="">
+        <div>
+          <h3 id="modalTitle" class="font-bold text-lg text-yellow-300">Nom de l'objet</h3>
+          <div class="flex items-center space-x-2 mt-1">
+            <span id="modalRarityBadge" class="text-xs uppercase font-bold px-2.5 py-0.5 rounded-md badge-Exotic">Exotique</span>
+            <span id="modalType" class="text-xs text-slate-400">Type</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Details -->
+      <div class="space-y-4">
+        <div>
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Informations d'obtention</h4>
+          <div id="modalDescription" class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 leading-relaxed">
+            Double-cliquez pour débloquer l'apparence.
+          </div>
+        </div>
+
+        <div id="modalSkinsBox">
+          <h4 class="text-xs font-semibold text-yellow-400 uppercase tracking-wider mb-1">✨ Skin associé à débloquer</h4>
+          <div id="modalSkinContent" class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-200">
+            <!-- Skin details inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
+        <span id="modalItemId">ID Item : #</span>
+        <button onclick="closeModal()" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-slate-950 font-bold rounded-xl transition">
+          Fermer (Échap)
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="bg-gwCard border-t border-gwCardBorder py-6 text-center text-xs text-slate-500">
+    <p>Guild Wars 2 Skin, Container & Legendary Explorer • Données extraites depuis GW2.app API</p>
+  </footer>
+
+  <script>
+    let dbData = { skins: [], containers: [], legendaries: [], unlocks_tree: [] };
+
+    async function loadData() {
+      document.getElementById('loadingBox').classList.remove('hidden');
+      document.getElementById('errorBox').classList.add('hidden');
+
+      if (window.GW2_SKINS_DB && (window.GW2_SKINS_DB.skins || window.GW2_SKINS_DB.legendaries)) {
+        console.log("Loaded data from window.GW2_SKINS_DB script tag.");
+        dbData = window.GW2_SKINS_DB;
+        initUI();
+        return;
+      }
+
+      try {
+        const resp = await fetch('gw2_skins_unlocks.json');
+        if (!resp.ok) throw new Error('Http ' + resp.status);
+        dbData = await resp.json();
+        console.log("Loaded data from gw2_skins_unlocks.json fetch.");
+        initUI();
+      } catch (e) {
+        console.warn("Could not fetch gw2_skins_unlocks.json directly:", e);
+        document.getElementById('loadingBox').classList.add('hidden');
+        document.getElementById('errorBox').classList.remove('hidden');
+      }
+    }
+
+    function loadFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          dbData = JSON.parse(e.target.result);
+          document.getElementById('errorBox').classList.add('hidden');
+          initUI();
+        } catch (err) {
+          alert("Erreur lors de la lecture du fichier JSON : " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function initUI() {
+      document.getElementById('loadingBox').classList.add('hidden');
+      document.getElementById('countSkins').innerText = dbData.skins ? dbData.skins.length : 0;
+      document.getElementById('countContainers').innerText = dbData.containers ? dbData.containers.length : 0;
+      document.getElementById('countUnlocksTree').innerText = dbData.unlocks_tree ? dbData.unlocks_tree.length : 0;
+      document.getElementById('countLeg').innerText = dbData.legendaries ? dbData.legendaries.length : 0;
+
+      switchTab('skins');
+      filterSkins();
+      filterContainers();
+      filterUnlocksTree();
+      filterLegendaries();
+    }
+
+    function switchTab(tab) {
+      const btnSkins = document.getElementById('tabBtnSkins');
+      const btnContainers = document.getElementById('tabBtnContainers');
+      const btnUnlocksTree = document.getElementById('tabBtnUnlocksTree');
+      const btnLeg = document.getElementById('tabBtnLeg');
+
+      const secSkins = document.getElementById('secSkins');
+      const secContainers = document.getElementById('secContainers');
+      const secUnlocksTree = document.getElementById('secUnlocksTree');
+      const secLeg = document.getElementById('secLeg');
+
+      btnSkins.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnContainers.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnUnlocksTree.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnLeg.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+
+      secSkins.classList.add('hidden');
+      secContainers.classList.add('hidden');
+      secUnlocksTree.classList.add('hidden');
+      secLeg.classList.add('hidden');
+
+      if (tab === 'skins') {
+        btnSkins.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow";
+        secSkins.classList.remove('hidden');
+      } else if (tab === 'containers') {
+        btnContainers.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-amber-300 bg-amber-950/60 shadow border border-amber-800/50";
+        secContainers.classList.remove('hidden');
+      } else if (tab === 'unlocksTree') {
+        btnUnlocksTree.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-blue-300 bg-blue-950/60 shadow border border-blue-800/50";
+        secUnlocksTree.classList.remove('hidden');
+      } else {
+        btnLeg.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-purple-300 bg-purple-950/60 shadow border border-purple-800/50";
+        secLeg.classList.remove('hidden');
+      }
+    }
+
+    // --- SKINS RENDER ---
+    function filterSkins() {
+      const query = document.getElementById('skinSearch').value.toLowerCase().trim();
+      const type = document.getElementById('skinType').value;
+      const rarity = document.getElementById('skinRarity').value;
+
+      const filtered = (dbData.skins || []).filter(s => {
+        if (type && s.type !== type) return false;
+        if (rarity && s.rarity !== rarity) return false;
+        if (query) {
+          const matchName = s.name && s.name.toLowerCase().includes(query);
+          const matchKeywords = s.keywords && (Array.isArray(s.keywords) ? s.keywords.join(' ') : s.keywords).toLowerCase().includes(query);
+          const matchContainers = s.containers && s.containers.some(c => c.name && c.name.toLowerCase().includes(query));
+          if (!matchName && !matchKeywords && !matchContainers) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('skinsMatchingCount').innerText = `${filtered.length} skin(s) trouvé(s)`;
+      renderSkins(filtered.slice(0, 150));
+    }
+
+    function renderSkins(skins) {
+      const container = document.getElementById('skinsGrid');
+      if (skins.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucun skin ne correspond aux critères.</div>`;
+        return;
+      }
+
+      container.innerHTML = skins.map(s => {
+        const rarity = s.rarity || 'Basic';
+        const acqList = s.acquisitionMethods || [];
+        const containers = s.containers || [];
+
+        let unlockHtml = '';
+        if (acqList.length > 0) {
+          unlockHtml = acqList.slice(0, 4).map(m => {
+            if (m.item) {
+              return `<li class="flex items-center space-x-2 text-xs text-slate-300 bg-slate-900/60 p-1.5 rounded-lg border border-slate-800 cursor-pointer hover:border-yellow-500/50 transition" onclick="openItemModalByName('${escapeHtml(m.item.name)}')">
+                <img src="${m.item.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-5 h-5 rounded object-cover">
+                <span class="truncate">${escapeHtml(m.item.name)}</span>
+              </li>`;
+            } else if (m.achievement) {
+              return `<li class="text-xs text-amber-300 bg-amber-950/30 p-1.5 rounded-lg border border-amber-800/40">🏆 Succès : ${escapeHtml(m.achievement.name)}</li>`;
+            } else if (m.recipe) {
+              return `<li class="text-xs text-blue-300 bg-blue-950/30 p-1.5 rounded-lg border border-blue-800/40">📜 Recette d'artisanat</li>`;
+            } else {
+              return `<li class="text-xs text-slate-400">Obtention spéciale</li>`;
+            }
+          }).join('');
+        }
+
+        let containerBoxHtml = '';
+        if (containers.length > 0) {
+          containerBoxHtml = `<div class="mt-2 pt-2 border-t border-slate-800/80">
+            <p class="text-[11px] font-semibold text-amber-300/90 uppercase tracking-wider mb-1.5">📦 Obtenable dans caisse/boîte :</p>
+            <ul class="space-y-1">
+              ${containers.map(c => `
+                <li class="flex items-center justify-between text-xs bg-amber-950/30 border border-amber-800/40 p-1.5 rounded-lg">
+                  <div class="flex items-center space-x-2 truncate">
+                    <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded object-cover">
+                    <span class="truncate text-amber-200">${escapeHtml(c.name)}</span>
+                  </div>
+                  ${c.isTpItem ? `<span class="text-[9px] bg-green-950 text-green-300 px-1.5 py-0.5 rounded border border-green-800 flex-shrink-0 font-bold">TP</span>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>`;
+        }
+
+        return `
+          <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-slate-600 transition rarity-${rarity}">
+            <div>
+              <div class="flex items-start space-x-3 mb-3 cursor-pointer" onclick="openSkinModal(${s.id})">
+                <img src="${s.icon || ''}" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700 object-cover flex-shrink-0 shadow" alt="">
+                <div class="overflow-hidden">
+                  <h3 class="font-bold text-sm text-slate-100 truncate hover:text-yellow-400 transition" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</h3>
+                  <div class="flex items-center space-x-2 mt-1">
+                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md badge-${rarity}">${rarity}</span>
+                    <span class="text-xs text-slate-400">${s.type || 'Skin'}</span>
+                  </div>
+                </div>
+              </div>
+
+              ${unlockHtml ? `
+                <div class="mt-2 pt-2 border-t border-slate-800/80">
+                  <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Méthodes de déblocage :</p>
+                  <ul class="space-y-1.5">${unlockHtml}</ul>
+                </div>
+              ` : ''}
+
+              ${containerBoxHtml}
+            </div>
+
+            <div class="mt-3 pt-2 text-[10px] text-slate-500 flex justify-between">
+              <span>ID Skin : #${s.id}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- CONTAINERS RENDER ---
+    function filterContainers() {
+      const query = document.getElementById('containerSearch').value.toLowerCase().trim();
+      const tpFilter = document.getElementById('containerTpFilter').value;
+      const catFilter = document.getElementById('containerCategoryFilter').value;
+      const rewardFilter = document.getElementById('containerRewardTypeFilter').value;
+      const semanticFilter = document.getElementById('containerSemanticFilter').value;
+
+      const filtered = (dbData.containers || []).filter(c => {
+        if (tpFilter === 'tp' && !c.isTpItem) return false;
+        if (tpFilter === 'account' && c.isTpItem) return false;
+
+        if (catFilter && c.category !== catFilter) return false;
+        if (rewardFilter && c.reward_type !== rewardFilter) return false;
+
+        if (semanticFilter === 'choice' && !c.has_context_choice) return false;
+        if (semanticFilter === 'selectable' && !c.is_selectable_type) return false;
+        if (semanticFilter === 'stat_selection' && !c.has_stat_selection) return false;
+
+        if (query) {
+          const matchName = c.name && c.name.toLowerCase().includes(query);
+          const matchItems = c.items && c.items.some(item => (typeof item === 'string' ? item : item.name).toLowerCase().includes(query));
+          const matchSkins = c.skins && c.skins.some(s => s.name && s.name.toLowerCase().includes(query));
+          if (!matchName && !matchItems && !matchSkins) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('containersMatchingCount').innerText = `${filtered.length} caisse(s) trouvée(s)`;
+      renderContainers(filtered);
+    }
+
+    function renderContainers(list) {
+      const container = document.getElementById('containersGrid');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucune caisse / boîte ne correspond aux critères.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(c => {
+        const rawItems = c.items && c.items.length > 0 ? c.items : (c.skins || []);
+
+        return `
+          <div class="bg-gwCard border border-amber-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div class="flex items-center space-x-4 mb-4 pb-3 border-b border-slate-800">
+                <img src="${c.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-700/50 object-cover flex-shrink-0 shadow" alt="">
+                <div>
+                  <h3 class="font-bold text-base text-amber-300 tracking-wide">${escapeHtml(c.name)}</h3>
+                  <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                    ${c.isTpItem ?
+                      `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-green-950 text-green-300 border border-green-800">🛒 Achetable au comptoir (TP)</span>` :
+                      `<span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700">🔒 Lié au compte / Spécial</span>`
+                    }
+                    ${c.category ? `<span class="text-[10px] bg-amber-950/80 text-amber-200 px-2 py-0.5 rounded-md border border-amber-800/60 font-semibold">${escapeHtml(c.category)}</span>` : ''}
+                    ${c.reward_type ? `<span class="text-[10px] bg-blue-950/80 text-blue-200 px-2 py-0.5 rounded-md border border-blue-800/60 font-semibold">${escapeHtml(c.reward_type)}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <!-- List of items / skins contained directly below as visual cards -->
+              <div class="mt-2">
+                <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Armes & Skins contenus (${rawItems.length}) - <span class="text-yellow-400">Cliquez pour prévisualiser</span> :</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+                  ${rawItems.map(it => {
+                    const itemObj = typeof it === 'string' ? { name: it } : it;
+                    const itemName = itemObj.name || 'Objet';
+                    const itemIcon = itemObj.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png';
+                    const itemRarity = itemObj.rarity || 'Exotic';
+
+                    return `
+                      <div class="flex items-center space-x-2.5 bg-slate-950/90 border border-slate-800 hover:border-yellow-500/60 p-2 rounded-xl cursor-pointer transition shadow-sm group" onclick="openItemModalByObject('${escapeHtml(itemName)}', '${escapeHtml(itemIcon)}', '${itemRarity}')">
+                        <img src="${itemIcon}" class="w-8 h-8 rounded-lg border border-slate-700 object-cover flex-shrink-0 group-hover:border-yellow-400 transition">
+                        <div class="overflow-hidden">
+                          <p class="text-xs font-semibold text-slate-200 truncate group-hover:text-yellow-300 transition">${escapeHtml(itemName)}</p>
+                          <span class="text-[10px] text-slate-500 uppercase">${itemObj.type || 'Skin'}</span>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
+              <span>Item ID : #${c.id}</span>
+              ${c.has_stat_selection ? `<span class="text-amber-400 font-medium">Has stat selection = True</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- MULTI-LEVEL UNLOCKS TREE RENDER (TAB 3) ---
+    function filterUnlocksTree() {
+      const query = document.getElementById('unlocksTreeSearch').value.toLowerCase().trim();
+
+      const filtered = (dbData.unlocks_tree || []).filter(t => {
+        if (query) {
+          const matchName = t.name && t.name.toLowerCase().includes(query);
+          const matchAncestors = t.ancestors_chain && t.ancestors_chain.some(a => a.name && a.name.toLowerCase().includes(query));
+          const matchChildren = t.children && t.children.some(ch => ch.name && ch.name.toLowerCase().includes(query));
+          if (!matchName && !matchAncestors && !matchChildren) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('unlocksTreeMatchingCount').innerText = `${filtered.length} élément(s) affiché(s)`;
+      renderUnlocksTree(filtered.slice(0, 100));
+    }
+
+    function renderAncestorChainHtml(ancestorList) {
+      if (!ancestorList || ancestorList.length === 0) return '';
+
+      return `<div class="bg-blue-950/40 border border-blue-800/50 rounded-xl p-3 my-2 space-y-2">
+        <p class="text-[11px] font-bold text-blue-300 uppercase tracking-wider flex items-center space-x-1">
+          <span>⬆️ Arborescence des Parents Multi-Niveaux jusqu'à la Racine :</span>
+        </p>
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          ${ancestorList.map(a => {
+            const higherChain = a.higher_parents ? renderAncestorChainHtml(a.higher_parents) : '';
+            return `
+              <div class="flex items-center space-x-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-blue-700/60 text-blue-200 cursor-pointer hover:border-blue-400 transition" onclick="openItemModalByObject('${escapeHtml(a.name)}', '${escapeHtml(a.icon || '')}', 'Exotic')">
+                <img src="${a.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-4 h-4 rounded">
+                <span class="font-semibold">${escapeHtml(a.name)}</span>
+                <span class="text-[9px] text-blue-400 bg-blue-950 px-1 rounded">${escapeHtml(a.type || 'Parent')}</span>
+              </div>
+              <span class="text-slate-500 font-bold">⬆️</span>
+              ${higherChain}
+            `;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    function renderUnlocksTree(list) {
+      const container = document.getElementById('unlocksTreeGrid');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucun élément ne correspond aux critères.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(t => {
+        const children = t.children || [];
+        const ancestorsHtml = renderAncestorChainHtml(t.ancestors_chain);
+
+        return `
+          <div class="bg-gwCard border border-blue-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+            <div>
+              <div class="flex items-center space-x-4 mb-3 pb-3 border-b border-slate-800">
+                <img src="${t.icon || 'https://render.guildwars2.com/file/D9FAF72552BF0602C9C310F45FB0E1A3D71244B7/3708814.png'}" class="w-12 h-12 rounded-xl bg-blue-950/40 border border-blue-700/50 object-cover flex-shrink-0 shadow" alt="">
+                <div>
+                  <h3 class="font-bold text-base text-blue-300 tracking-wide">${escapeHtml(t.name)}</h3>
+                  <div class="flex items-center space-x-2 mt-1">
+                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-blue-950 text-blue-200 border border-blue-800">${escapeHtml(t.type || 'Élément')}</span>
+                  </div>
+                </div>
+              </div>
+
+              ${ancestorsHtml}
+
+              ${t.description ? `<p class="text-xs text-slate-400 italic mb-3 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">${escapeHtml(t.description)}</p>` : ''}
+
+              <div>
+                <h4 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">⬇️ Sous-Éléments & Skins débloqués sous cet élément (${children.length}) :</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
+                  ${children.map(ch => `
+                    <div class="flex items-center space-x-2.5 bg-slate-950/90 border border-slate-800 hover:border-blue-500/60 p-2 rounded-xl cursor-pointer transition shadow-sm group" onclick="openItemModalByObject('${escapeHtml(ch.name)}', '${escapeHtml(ch.details ? ch.details.icon || '' : '')}', '${ch.details ? ch.details.rarity || 'Exotic' : 'Exotic'}')">
+                      <img src="${ch.details && ch.details.icon ? ch.details.icon : 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-8 h-8 rounded-lg border border-slate-700 object-cover flex-shrink-0 group-hover:border-blue-400 transition">
+                      <div class="overflow-hidden">
+                        <p class="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300 transition">${escapeHtml(ch.name)}</p>
+                        <span class="text-[10px] text-slate-500 uppercase">${ch.details ? ch.details.type || 'Skin' : 'Skin'}</span>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between">
+              <span>ID Élément : #${t.id || 'N/A'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- LEGENDARIES RENDER ---
+    function filterLegendaries() {
+      const query = document.getElementById('legSearch').value.toLowerCase().trim();
+      const type = document.getElementById('legType').value;
+
+      const filtered = (dbData.legendaries || []).filter(l => {
+        if (type && l.type !== type) return false;
+        if (query && !(l.name && l.name.toLowerCase().includes(query))) return false;
+        return true;
+      });
+
+      document.getElementById('legMatchingCount').innerText = `${filtered.length} objet(s) légendaire(s) affiché(s)`;
+      renderLegendaries(filtered);
+    }
+
+    function renderLegendaries(list) {
+      const container = document.getElementById('legGrid');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucun objet légendaire trouvé.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(leg => {
+        const treeHtml = leg.craft_tree ? renderCraftTree(leg.craft_tree) : `<p class="text-xs text-slate-500 italic p-2 bg-slate-900/40 rounded-lg">Recette directe non disponible ou via succès de collection.</p>`;
+
+        return `
+          <div class="bg-gwCard border border-purple-900/40 rounded-2xl p-5 shadow-xl flex flex-col justify-between rarity-Legendary">
+            <div>
+              <div class="flex items-center space-x-4 mb-4 pb-3 border-b border-slate-800">
+                <img src="${leg.icon || ''}" class="w-14 h-14 rounded-xl bg-purple-950/60 border border-purple-600/50 object-cover flex-shrink-0 shadow-inner" alt="">
+                <div>
+                  <h3 class="font-bold text-base text-purple-200">${escapeHtml(leg.name)}</h3>
+                  <div class="flex items-center space-x-2 mt-1">
+                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md badge-Legendary">Légendaire</span>
+                    <span class="text-xs text-slate-400">${leg.type || 'Objet'}</span>
+                    <span class="text-xs text-slate-500">• Max compte : ${leg.max_count || 1}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Crafting Tree -->
+              <div>
+                <h4 class="text-xs font-semibold text-purple-300 uppercase tracking-wider mb-2 flex items-center">
+                  <span>🛠️ Composants & Recette de Fabrication</span>
+                </h4>
+                <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 max-h-72 overflow-y-auto space-y-2">
+                  ${treeHtml}
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800/80 text-xs text-slate-500 flex justify-between items-center">
+              <span>Item ID : #${leg.id}</span>
+              ${leg.default_skin_id ? `<span class="text-yellow-400/80">Skin associé : #${leg.default_skin_id}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderCraftTree(treeNode) {
+      if (!treeNode || !treeNode.ingredients || treeNode.ingredients.length === 0) return '';
+
+      return `<ul class="space-y-1.5 pl-2 border-l border-purple-800/40">
+        ${treeNode.ingredients.map(ing => {
+          const rarity = ing.rarity || 'Basic';
+          const subTree = ing.sub_recipe ? renderCraftTree(ing.sub_recipe) : '';
+
+          return `
+            <li class="text-xs">
+              <div class="flex items-center space-x-2 bg-slate-900/80 p-1.5 rounded-lg border border-slate-800 hover:border-purple-800/50 transition">
+                <img src="${ing.icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png'}" class="w-5 h-5 rounded">
+                <span class="font-bold text-yellow-400 text-xs">${ing.count}x</span>
+                <span class="font-medium truncate text-slate-200 rarity-${rarity}">${escapeHtml(ing.name || 'Objet')}</span>
+              </div>
+              ${subTree ? `<div class="mt-1 ml-3">${subTree}</div>` : ''}
+            </li>
+          `;
+        }).join('')}
+      </ul>`;
+    }
+
+    // --- POPUP MODAL (MARCHAND STYLE PREVIEW) ---
+    function openItemModalByObject(name, icon, rarity) {
+      document.getElementById('modalTitle').innerText = name;
+      document.getElementById('modalIcon').src = icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png';
+      document.getElementById('modalType').innerText = 'Arme / Skin';
+      document.getElementById('modalRarityBadge').innerText = rarity || 'Exotique';
+      document.getElementById('modalRarityBadge').className = `text-xs uppercase font-bold px-2.5 py-0.5 rounded-md badge-${rarity || 'Exotic'}`;
+      document.getElementById('modalDescription').innerText = `Cliquez ou double-cliquez pour prévisualiser cet équipement et débloquer l'apparence dans votre garde-robe Guild Wars 2.`;
+
+      const skinMatch = (dbData.skins || []).find(s => s.name && s.name.toLowerCase() === name.toLowerCase());
+      if (skinMatch) {
+        document.getElementById('modalItemId').innerText = `ID Skin : #${skinMatch.id}`;
+        document.getElementById('modalSkinContent').innerHTML = `
+          <div class="flex items-center space-x-3">
+            <img src="${skinMatch.icon}" class="w-10 h-10 rounded-lg border border-slate-700">
+            <div>
+              <p class="font-bold text-sm text-yellow-300">${escapeHtml(skinMatch.name)}</p>
+              <p class="text-[11px] text-slate-400">Type : ${skinMatch.type} • Rareté : ${skinMatch.rarity}</p>
+            </div>
+          </div>
+        `;
+      } else {
+        document.getElementById('modalItemId').innerText = `Équipement spécial GW2`;
+        document.getElementById('modalSkinContent').innerHTML = `<p class="text-slate-400 italic text-xs">Skin directement lié à l'objet.</p>`;
+      }
+
+      document.getElementById('itemModal').classList.remove('hidden');
+    }
+
+    function openSkinModal(skinId) {
+      const skin = (dbData.skins || []).find(s => s.id === skinId);
+      if (!skin) return;
+
+      openItemModalByObject(skin.name, skin.icon, skin.rarity);
+    }
+
+    function openItemModalByName(name) {
+      openItemModalByObject(name, 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png', 'Exotic');
+    }
+
+    function closeModal() {
+      document.getElementById('itemModal').classList.add('hidden');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
