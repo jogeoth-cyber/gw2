@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Script Principal d'Orchestration:
-Effectue d'abord une pré-détection rapide du nombre total d'éléments disponibles (skins, caisses, légendaires),
+Effectue d'abord une pré-détection rapide du nombre total d'éléments disponibles (skins, caisses, légendaires, teintures),
 affiche un résumé clair, puis lance l'extraction modulaire:
 - Module 1: scrape_skins.py (Skins & détails)
 - Module 2: scrape_containers.py (Caisses, coffres, boîtes d'apparences)
 - Module 3: scrape_legendaries.py (Armurerie Légendaire & recettes de craft)
 - Module 4: scrape_unlocks_tree.py (Hiérarchie Élément Parent -> Arbre de Déblocage)
+- Module 5: scrape_dyes.py (Extraction complète des 600+ teintures GW2 & flacons)
 
 Exporte vers SQLite, JSON et JavaScript.
 """
@@ -25,6 +26,7 @@ from scrape_skins import run_scrape_skins
 from scrape_containers import run_scrape_containers, KNOWN_CONTAINER_IDS
 from scrape_legendaries import run_scrape_legendaries
 from scrape_unlocks_tree import run_scrape_unlocks_tree
+from scrape_dyes import run_scrape_dyes
 
 DEFAULT_DB_PATH = "gw2_skins_unlocks.db"
 DEFAULT_JSON_PATH = "gw2_skins_unlocks.json"
@@ -39,7 +41,7 @@ def fetch_json(url, timeout=10):
 
 def pre_detection_scan(lang="fr"):
     print("\n🔍 ==============================================================")
-    print("   PHASE DE PRÉ-DÉTECTION DES ÉLÉMENTS (GW2.app API)")
+    print("   PHASE DE PRÉ-DÉTECTION DES ÉLÉMENTS (GW2 API & GW2.app API)")
     print("==============================================================")
     print("Analyse rapide des bases de données distantes en cours...\n")
 
@@ -47,7 +49,8 @@ def pre_detection_scan(lang="fr"):
         "skins": 0,
         "containers_estimate": 0,
         "legendaries": 0,
-        "mystic_recipes": 0
+        "mystic_recipes": 0,
+        "dyes": 0
     }
 
     try:
@@ -71,11 +74,18 @@ def pre_detection_scan(lang="fr"):
     except Exception as e:
         print(f"[Avertissement] Pré-détection recettes mystiques : {e}")
 
+    try:
+        colors_summary = fetch_json("https://api.guildwars2.com/v2/colors")
+        counts["dyes"] = len(colors_summary) if isinstance(colors_summary, list) else 0
+    except Exception as e:
+        print(f"[Avertissement] Pré-détection teintures : {e}")
+
     print("📊 --------------------------------------------------------------")
     print(f"   • Skins détectés dans la garde-robe    : {counts['skins']} skins")
     print(f"   • Caisses, boîtes et coffres détectés  : ~{counts['containers_estimate']} caisses & coffres")
     print(f"   • Armurerie Légendaire détectée         : {counts['legendaries']} objets légendaires")
     print(f"   • Recettes de la Forge Mystique          : {counts['mystic_recipes']} recettes")
+    print(f"   • Teintures & Couleurs de la palette    : {counts['dyes']} teintures")
     print("--------------------------------------------------------------")
     print("✅ Pré-détection terminée. Lancement de l'extraction modulaire...\n")
     return counts
@@ -134,11 +144,30 @@ def init_sqlite_db(db_path):
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dyes (
+            id INTEGER PRIMARY KEY,
+            color_id INTEGER,
+            item_id INTEGER,
+            name TEXT,
+            full_name TEXT,
+            hex TEXT,
+            hue TEXT,
+            rarity TEXT,
+            icon TEXT,
+            is_tp_item INTEGER,
+            buy_price INTEGER,
+            sell_price INTEGER,
+            containers_json TEXT,
+            full_data_json TEXT
+        )
+    """)
+
     conn.commit()
     return conn
 
 def main():
-    parser = argparse.ArgumentParser(description="Extraction complète GW2 Skins, Caisses, Légendaires et Arbre de Déblocages")
+    parser = argparse.ArgumentParser(description="Extraction complète GW2 Skins, Caisses, Légendaires, Teintures et Arbre de Déblocages")
     parser.add_argument("--limit", type=int, default=0, help="Limiter le nombre de skins (0 pour tous)")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Nombre de threads concurrents")
     parser.add_argument("--db", type=str, default=DEFAULT_DB_PATH, help="Chemin du fichier SQLite")
@@ -166,7 +195,10 @@ def main():
     # Step 4: Module Unlocks Tree Hierarchy
     unlocks_tree_list = run_scrape_unlocks_tree(skin_results, container_list, leg_results)
 
-    # Step 5: Save to SQLite, JSON & JS
+    # Step 5: Module Dyes
+    dyes_list = run_scrape_dyes(container_results=container_list)
+
+    # Step 6: Save to SQLite, JSON & JS
     print(f"\n[SAUVEGARDE] Enregistrement dans la base SQLite ({args.db})...")
     conn = init_sqlite_db(args.db)
     cursor = conn.cursor()
@@ -175,6 +207,7 @@ def main():
     cursor.execute("DELETE FROM containers")
     cursor.execute("DELETE FROM legendaries")
     cursor.execute("DELETE FROM unlocks_tree")
+    cursor.execute("DELETE FROM dyes")
 
     skin_db_rows = []
     skin_json_export = []
@@ -274,6 +307,30 @@ def main():
         VALUES (?, ?, ?)
     """, tree_db_rows)
 
+    dyes_db_rows = []
+    for d in dyes_list:
+        dyes_db_rows.append((
+            d["id"],
+            d["color_id"],
+            d["item_id"],
+            d["name"],
+            d["full_name"],
+            d["hex"],
+            d["hue"],
+            d["rarity"],
+            d["icon"],
+            1 if d["is_tp_item"] else 0,
+            d["buy_price"],
+            d["sell_price"],
+            json.dumps(d["containers"], ensure_ascii=False),
+            json.dumps(d, ensure_ascii=False)
+        ))
+
+    cursor.executemany("""
+        INSERT INTO dyes (id, color_id, item_id, name, full_name, hex, hue, rarity, icon, is_tp_item, buy_price, sell_price, containers_json, full_data_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, dyes_db_rows)
+
     conn.commit()
     conn.close()
 
@@ -281,7 +338,8 @@ def main():
         "skins": skin_json_export,
         "containers": container_list,
         "legendaries": leg_results,
-        "unlocks_tree": unlocks_tree_list
+        "unlocks_tree": unlocks_tree_list,
+        "dyes": dyes_list
     }
 
     print(f"Sauvegarde du fichier JSON ({args.json})...")
@@ -296,7 +354,7 @@ def main():
 
     print(f"\n==============================================================")
     print(f"Extraction et génération complètes terminées avec succès !")
-    print(f"Skins : {len(skin_db_rows)} | Caisses : {len(container_db_rows)} | Légendaires : {len(leg_db_rows)} | Arbres de déblocages : {len(tree_db_rows)}")
+    print(f"Skins : {len(skin_db_rows)} | Caisses : {len(container_db_rows)} | Légendaires : {len(leg_db_rows)} | Arbres : {len(tree_db_rows)} | Teintures : {len(dyes_db_rows)}")
     print(f"==============================================================")
 
 if __name__ == "__main__":

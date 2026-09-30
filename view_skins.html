@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guild Wars 2 - Explorateur de Skins, Caisses, Déblocages & Craft Légendaire</title>
+  <title>Guild Wars 2 - Explorateur de Skins, Caisses, Teintures & Craft Légendaire</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="gw2_skins_unlocks.js"></script>
   <script>
@@ -53,8 +53,8 @@
           ⚔️
         </div>
         <div>
-          <h1 class="text-xl font-bold text-yellow-400 tracking-wide">GW2 Skins, Caisses & Craft Légendaire</h1>
-          <p class="text-xs text-slate-400">Base de données d'obtention, coffres d'apparences et recettes de fabrication</p>
+          <h1 class="text-xl font-bold text-yellow-400 tracking-wide">GW2 Skins, Caisses, Teintures & Craft Légendaire</h1>
+          <p class="text-xs text-slate-400">Base de données d'obtention, coffres d'apparences, palette de teintures et recettes de fabrication</p>
         </div>
       </div>
 
@@ -71,6 +71,9 @@
         </button>
         <button id="tabBtnLeg" onclick="switchTab('legendaries')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
           🔮 Légendaires (<span id="countLeg">0</span>)
+        </button>
+        <button id="tabBtnDyes" onclick="switchTab('dyes')" class="px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200">
+          🎨 Teintures (<span id="countDyes">0</span>)
         </button>
       </nav>
     </div>
@@ -272,6 +275,62 @@
       <div id="legGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
     </section>
 
+    <!-- TAB 5: DYES / TEINTURES -->
+    <section id="secDyes" class="hidden space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-gwCard border border-gwCardBorder rounded-2xl p-5 shadow-md flex flex-wrap gap-4 items-center">
+        <div class="flex-grow min-w-[260px]">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Recherche de Teinture (Nom, Code Hex #RRGGBB ou Kit)</label>
+          <input type="text" id="dyeSearch" oninput="filterDyes()" placeholder="Ex: Noir, Abyssal, Craie, #252326, Kit du Lion..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 text-slate-100 placeholder-slate-500">
+        </div>
+
+        <div class="w-56">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Teinte / Gamme de couleur</label>
+          <select id="dyeHueFilter" onchange="filterDyes()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+            <option value="">Toutes les teintes</option>
+            <option value="Gris / Noir / Blanc">Gris / Noir / Blanc</option>
+            <option value="Rouge">Rouge</option>
+            <option value="Orange">Orange</option>
+            <option value="Jaune / Doré">Jaune / Doré</option>
+            <option value="Vert">Vert</option>
+            <option value="Bleu">Bleu</option>
+            <option value="Violet / Rose">Violet / Rose</option>
+            <option value="Marron / Brun">Marron / Brun</option>
+            <option value="Exclusif (Kit du Lion Noir)">Exclusif (Kit Lion Noir)</option>
+          </select>
+        </div>
+
+        <div class="w-44">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Rareté</label>
+          <select id="dyeRarityFilter" onchange="filterDyes()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+            <option value="">Toutes les raretés</option>
+            <option value="Rare">Rare</option>
+            <option value="Masterwork">Chef-d'œuvre</option>
+            <option value="Fine">Raffiné</option>
+            <option value="Basic">Basique</option>
+          </select>
+        </div>
+
+        <div class="w-52">
+          <label class="block text-xs font-medium text-slate-400 mb-1">Disponibilité Comptoir</label>
+          <select id="dyeTpFilter" onchange="filterDyes()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500">
+            <option value="">Toutes les teintures</option>
+            <option value="tp">Achetable au comptoir (TP)</option>
+            <option value="account">Liée au compte / Non vendable</option>
+          </select>
+        </div>
+
+        <div class="flex items-end pb-0.5">
+          <span id="dyesMatchingCount" class="text-xs text-cyan-300 font-medium bg-cyan-950/40 px-3 py-2.5 rounded-xl border border-cyan-800/50">
+            0 teinture(s) affichée(s)
+          </span>
+        </div>
+      </div>
+
+      <!-- Dyes Grid -->
+      <div id="dyesGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5"></div>
+    </section>
+
   </main>
 
   <!-- MERCHANT STYLE PREVIEW POPUP MODAL -->
@@ -324,17 +383,17 @@
   </div>
 
   <footer class="bg-gwCard border-t border-gwCardBorder py-6 text-center text-xs text-slate-500">
-    <p>Guild Wars 2 Skin, Container & Legendary Explorer • Données extraites depuis GW2.app API</p>
+    <p>Guild Wars 2 Skin, Container, Dye & Legendary Explorer • Données extraites depuis GW2.app API & GW2 v2 API</p>
   </footer>
 
   <script>
-    let dbData = { skins: [], containers: [], legendaries: [], unlocks_tree: [] };
+    let dbData = { skins: [], containers: [], legendaries: [], unlocks_tree: [], dyes: [] };
 
     async function loadData() {
       document.getElementById('loadingBox').classList.remove('hidden');
       document.getElementById('errorBox').classList.add('hidden');
 
-      if (window.GW2_SKINS_DB && (window.GW2_SKINS_DB.skins || window.GW2_SKINS_DB.legendaries)) {
+      if (window.GW2_SKINS_DB && (window.GW2_SKINS_DB.skins || window.GW2_SKINS_DB.legendaries || window.GW2_SKINS_DB.dyes)) {
         console.log("Loaded data from window.GW2_SKINS_DB script tag.");
         dbData = window.GW2_SKINS_DB;
         initUI();
@@ -377,12 +436,14 @@
       document.getElementById('countContainers').innerText = dbData.containers ? dbData.containers.length : 0;
       document.getElementById('countUnlocksTree').innerText = dbData.unlocks_tree ? dbData.unlocks_tree.length : 0;
       document.getElementById('countLeg').innerText = dbData.legendaries ? dbData.legendaries.length : 0;
+      document.getElementById('countDyes').innerText = dbData.dyes ? dbData.dyes.length : 0;
 
       switchTab('skins');
       filterSkins();
       filterContainers();
       filterUnlocksTree();
       filterLegendaries();
+      filterDyes();
     }
 
     function switchTab(tab) {
@@ -390,21 +451,25 @@
       const btnContainers = document.getElementById('tabBtnContainers');
       const btnUnlocksTree = document.getElementById('tabBtnUnlocksTree');
       const btnLeg = document.getElementById('tabBtnLeg');
+      const btnDyes = document.getElementById('tabBtnDyes');
 
       const secSkins = document.getElementById('secSkins');
       const secContainers = document.getElementById('secContainers');
       const secUnlocksTree = document.getElementById('secUnlocksTree');
       const secLeg = document.getElementById('secLeg');
+      const secDyes = document.getElementById('secDyes');
 
       btnSkins.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
       btnContainers.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
       btnUnlocksTree.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
       btnLeg.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
+      btnDyes.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-slate-200";
 
       secSkins.classList.add('hidden');
       secContainers.classList.add('hidden');
       secUnlocksTree.classList.add('hidden');
       secLeg.classList.add('hidden');
+      secDyes.classList.add('hidden');
 
       if (tab === 'skins') {
         btnSkins.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-yellow-400 bg-slate-800 shadow";
@@ -415,9 +480,12 @@
       } else if (tab === 'unlocksTree') {
         btnUnlocksTree.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-blue-300 bg-blue-950/60 shadow border border-blue-800/50";
         secUnlocksTree.classList.remove('hidden');
-      } else {
+      } else if (tab === 'legendaries') {
         btnLeg.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-purple-300 bg-purple-950/60 shadow border border-purple-800/50";
         secLeg.classList.remove('hidden');
+      } else if (tab === 'dyes') {
+        btnDyes.className = "px-3 py-2 text-xs font-semibold rounded-lg transition-all text-cyan-300 bg-cyan-950/60 shadow border border-cyan-800/50";
+        secDyes.classList.remove('hidden');
       }
     }
 
@@ -792,17 +860,134 @@
       </ul>`;
     }
 
+    // --- DYES / TEINTURES RENDER (TAB 5) ---
+    function filterDyes() {
+      const query = document.getElementById('dyeSearch').value.toLowerCase().trim();
+      const hue = document.getElementById('dyeHueFilter').value;
+      const rarity = document.getElementById('dyeRarityFilter').value;
+      const tpFilter = document.getElementById('dyeTpFilter').value;
+
+      const filtered = (dbData.dyes || []).filter(d => {
+        if (hue && d.hue !== hue) return false;
+        if (rarity && d.rarity !== rarity) return false;
+        if (tpFilter === 'tp' && !d.is_tp_item) return false;
+        if (tpFilter === 'account' && d.is_tp_item) return false;
+
+        if (query) {
+          const matchName = d.name && d.name.toLowerCase().includes(query);
+          const matchFullName = d.full_name && d.full_name.toLowerCase().includes(query);
+          const matchHex = d.hex && d.hex.toLowerCase().includes(query);
+          const matchKits = d.containers && d.containers.some(c => c.name && c.name.toLowerCase().includes(query));
+          if (!matchName && !matchFullName && !matchHex && !matchKits) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('dyesMatchingCount').innerText = `${filtered.length} teinture(s) affichée(s)`;
+      renderDyes(filtered);
+    }
+
+    function formatCoins(coins) {
+      if (!coins || coins <= 0) return 'Non vendable';
+      const gold = Math.floor(coins / 10000);
+      const silver = Math.floor((coins % 10000) / 100);
+      const copper = coins % 100;
+      let str = '';
+      if (gold > 0) str += `${gold} po `;
+      if (silver > 0 || gold > 0) str += `${silver} pa `;
+      str += `${copper} pc`;
+      return str;
+    }
+
+    function renderDyes(list) {
+      const container = document.getElementById('dyesGrid');
+      if (list.length === 0) {
+        container.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500 font-medium">Aucune teinture ne correspond aux critères.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(d => {
+        const rarity = d.rarity || 'Basic';
+        const hex = d.hex || '#808080';
+        const priceStr = d.sell_price > 0 ? formatCoins(d.sell_price) : 'N/A';
+
+        return `
+          <div class="bg-gwCard border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-cyan-500/50 transition rarity-${rarity} cursor-pointer" onclick="openItemModalByObject('${escapeHtml(d.full_name || d.name)}', '${escapeHtml(d.icon)}', '${rarity}')">
+            <div>
+              <!-- Swatch & Flacon Icon -->
+              <div class="flex items-center space-x-3 mb-3">
+                <div class="relative flex-shrink-0">
+                  <!-- Color Swatch Box -->
+                  <div class="w-12 h-12 rounded-xl shadow-inner border border-white/20" style="background-color: ${hex}"></div>
+                  <img src="${d.icon}" class="w-6 h-6 absolute -bottom-1 -right-1 rounded-md bg-slate-900/90 border border-slate-700 object-cover shadow">
+                </div>
+                <div class="overflow-hidden">
+                  <h3 class="font-bold text-sm text-slate-100 truncate hover:text-cyan-300 transition" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</h3>
+                  <p class="text-[11px] font-mono text-cyan-400/90 font-bold">${hex}</p>
+                </div>
+              </div>
+
+              <!-- Category & Rarity Badges -->
+              <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md badge-${rarity}">${rarity}</span>
+                <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">${escapeHtml(d.hue || 'Teinture')}</span>
+              </div>
+
+              <!-- Price / Availability -->
+              <div class="mt-2 pt-2 border-t border-slate-800/80 text-xs">
+                ${d.is_tp_item ? `
+                  <div class="flex items-center justify-between text-green-300 bg-green-950/40 px-2 py-1 rounded-lg border border-green-800/50">
+                    <span class="text-[10px] font-bold uppercase">🛒 Prix TP</span>
+                    <span class="font-semibold text-[11px]">${priceStr}</span>
+                  </div>
+                ` : `
+                  <div class="text-[10px] text-slate-400 bg-slate-900/60 px-2 py-1 rounded-lg border border-slate-800">
+                    🔒 Non vendable au comptoir
+                  </div>
+                `}
+              </div>
+
+              <!-- Kits containing this dye -->
+              ${d.containers && d.containers.length > 0 ? `
+                <div class="mt-2 text-[10px] text-amber-300/90 bg-amber-950/30 p-1.5 rounded-lg border border-amber-800/40 truncate">
+                  📦 Contenu dans ${d.containers.length} kit(s) / coffre(s)
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="mt-3 pt-2 text-[10px] text-slate-500 flex justify-between">
+              <span>Color ID : #${d.color_id}</span>
+              <span>Item ID : #${d.item_id || 'N/A'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
     // --- POPUP MODAL (MARCHAND STYLE PREVIEW) ---
     function openItemModalByObject(name, icon, rarity) {
       document.getElementById('modalTitle').innerText = name;
       document.getElementById('modalIcon').src = icon || 'https://render.guildwars2.com/file/1D729F34C28669527D3A6F1E54215B354C873D4D/63127.png';
-      document.getElementById('modalType').innerText = 'Arme / Skin';
+      document.getElementById('modalType').innerText = 'Équipement / Teinture';
       document.getElementById('modalRarityBadge').innerText = rarity || 'Exotique';
       document.getElementById('modalRarityBadge').className = `text-xs uppercase font-bold px-2.5 py-0.5 rounded-md badge-${rarity || 'Exotic'}`;
-      document.getElementById('modalDescription').innerText = `Cliquez ou double-cliquez pour prévisualiser cet équipement et débloquer l'apparence dans votre garde-robe Guild Wars 2.`;
+      document.getElementById('modalDescription').innerText = `Cliquez ou double-cliquez pour prévisualiser cet objet et débloquer la teinture ou l'apparence dans votre compte Guild Wars 2.`;
 
+      const dyeMatch = (dbData.dyes || []).find(d => (d.full_name && d.full_name.toLowerCase() === name.toLowerCase()) || (d.name && d.name.toLowerCase() === name.toLowerCase()));
       const skinMatch = (dbData.skins || []).find(s => s.name && s.name.toLowerCase() === name.toLowerCase());
-      if (skinMatch) {
+
+      if (dyeMatch) {
+        document.getElementById('modalItemId').innerText = `Color ID : #${dyeMatch.color_id} • Item ID : #${dyeMatch.item_id}`;
+        document.getElementById('modalSkinContent').innerHTML = `
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-lg shadow border border-white/20" style="background-color: ${dyeMatch.hex}"></div>
+            <div>
+              <p class="font-bold text-sm text-cyan-300">${escapeHtml(dyeMatch.name)} (${dyeMatch.hex})</p>
+              <p class="text-[11px] text-slate-400">Gamme : ${dyeMatch.hue} • Rareté : ${dyeMatch.rarity}</p>
+            </div>
+          </div>
+        `;
+      } else if (skinMatch) {
         document.getElementById('modalItemId').innerText = `ID Skin : #${skinMatch.id}`;
         document.getElementById('modalSkinContent').innerHTML = `
           <div class="flex items-center space-x-3">
@@ -815,7 +1000,7 @@
         `;
       } else {
         document.getElementById('modalItemId').innerText = `Équipement spécial GW2`;
-        document.getElementById('modalSkinContent').innerHTML = `<p class="text-slate-400 italic text-xs">Skin directement lié à l'objet.</p>`;
+        document.getElementById('modalSkinContent').innerHTML = `<p class="text-slate-400 italic text-xs">Objet Guild Wars 2.</p>`;
       }
 
       document.getElementById('itemModal').classList.remove('hidden');
