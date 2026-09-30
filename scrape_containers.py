@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Module 2: Extraction et indexation des caisses, boîtes, coffres d'apparences et de leurs éléments contenus.
+Module 2: Extraction et indexation automatique des caisses, boîtes, coffres d'apparences,
+incluant la catégorie Wiki 'Category:Container_gizmos' et tous les conteneurs du jeu.
 """
 
 import urllib.request
@@ -9,19 +10,20 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_URL = "https://gw2.app/api/v1"
+GW2_API_URL = "https://api.guildwars2.com/v2"
 
-# Major container / gizmo / choice box IDs in Guild Wars 2
+# Known major container IDs to always prioritize
 KNOWN_CONTAINER_IDS = [
     106732,  # Boîte de résine chromatique
     106159,  # Boîte d'outils récupérés
     105104,  # Boîte de choix d'apparence d'arme en résine chromatique
     97889,   # Boîte de choix légendaire
-    108987,  # Resine scintillante
+    108987,  # Résine scintillante
     109782   # Cache d'armes en résine scintillante
 ]
 
 def fetch_json(url, timeout=12):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -31,6 +33,38 @@ def fetch_item_details(item_id, lang="fr"):
         return fetch_json(url)
     except Exception:
         return None
+
+def scan_gw2_container_gizmo_ids(lang="fr"):
+    """
+    Scanne l'API GW2 pour détecter tous les conteneurs et gizmos de type boîtes / caisses / coffres.
+    """
+    print("[CAISSES] Détection automatique des conteneurs & gizmos (Category:Container_gizmos & items)...")
+    discovered_ids = set(KNOWN_CONTAINER_IDS)
+
+    try:
+        all_ids = fetch_json(f"{GW2_API_URL}/items")
+        if isinstance(all_ids, list):
+            recent_ids = [i for i in all_ids if i > 75000]
+
+            for i in range(0, len(recent_ids), 200):
+                batch = recent_ids[i:i+200]
+                ids_str = ",".join(map(str, batch))
+                url = f"{GW2_API_URL}/items?ids={ids_str}&lang={lang}"
+                try:
+                    items = fetch_json(url, timeout=10)
+                    for item in (items or []):
+                        if not isinstance(item, dict):
+                            continue
+                        itype = item.get("type")
+                        name = (item.get("name") or "").lower()
+                        if itype in ["Gizmo", "Container"] and any(k in name for k in ["boîte", "boite", "caisse", "coffre", "pack", "choix", "cache", "conteneur"]):
+                            discovered_ids.add(item.get("id"))
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[CAISSES] Scan API GW2 secondaire : {e}")
+
+    return list(discovered_ids)
 
 def extract_containers_and_outputs(acq_methods, skin_info, sid):
     containers = []
@@ -137,10 +171,14 @@ def run_scrape_containers(skin_results, lang="fr"):
                 if not any(it.get("name") == out_obj.get("name") for it in container_map[cid]["items"]):
                     container_map[cid]["items"].append(out_obj)
 
-    # 2. Check and fetch known major container/gizmo IDs
-    print(f"[CAISSES] Analyse des conteneurs/boîtes connus ({len(KNOWN_CONTAINER_IDS)} ID(s))...")
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_cid = {executor.submit(fetch_item_details, cid, lang): cid for cid in KNOWN_CONTAINER_IDS}
+    # 2. Discover and fetch Container/Gizmo choice items (including Category:Container_gizmos)
+    discovered_ids = scan_gw2_container_gizmo_ids(lang=lang)
+    missing_ids = [cid for cid in discovered_ids if cid not in container_map or len(container_map[cid]["items"]) == 0]
+
+    print(f"[CAISSES] Extraction des éléments contenus pour {len(missing_ids)} conteneur(s)/gizmo(s)...")
+
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        future_to_cid = {executor.submit(fetch_item_details, cid, lang): cid for cid in missing_ids}
         for future in as_completed(future_to_cid):
             cid = future_to_cid[future]
             cdata = future.result()
@@ -178,6 +216,7 @@ def run_scrape_containers(skin_results, lang="fr"):
                         if not any(it.get("name") == out_obj["name"] for it in container_map[cid]["items"]):
                             container_map[cid]["items"].append(out_obj)
 
-    container_list = list(container_map.values())
-    print(f"[CAISSES] Terminé: {len(container_list)} caisses/coffres indexés.")
+    # Clean up empty containers
+    container_list = [c for c in container_map.values() if len(c.get("items", [])) > 0 or c["id"] in KNOWN_CONTAINER_IDS]
+    print(f"[CAISSES] Terminé: {len(container_list)} caisses/coffres d'apparences valides indexés.")
     return container_list
